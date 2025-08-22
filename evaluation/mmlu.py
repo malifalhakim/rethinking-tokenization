@@ -6,6 +6,8 @@ from tqdm import tqdm
 from datasets import load_dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
+from tokenizer.bpe_random_tokenizer import BPEAlternativeTokenizer
+
 def setup_model_and_tokenizer(model_name):
     """Loads the model and tokenizer and sets the device."""
     tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -22,6 +24,10 @@ def build_prompt(question, choices):
         prompt_text += f"{chr(65+j)}. {choice_text}\n"
     prompt_text += "Answer:"
     return prompt_text
+
+def initialize_random_tokenizer(tokenizer):
+    """Initializes the random tokenizer."""
+    return BPEAlternativeTokenizer(tokenizer)
 
 def get_choice_tokens(tokenizer, num_choices=4):
     """Gets the token IDs for the first few uppercase letters (A, B, C, ...)."""
@@ -64,20 +70,30 @@ def evaluate_single_variant_by_prob(model, input_tensor, choice_token_ids):
             
     return best_choice_char
 
-def get_input_variants(prompt_text, tokenizer, device):
+def get_input_variants(prompt_text, tokenizer, device, n=10):
     """Generates a list of input tensors based on the chosen tokenization strategy."""
     input_variants = []
 
-    encoded_input = tokenizer.encode(prompt_text, return_tensors="pt", add_special_tokens=True)
-    input_variants.append({
-        "tensor": encoded_input.to(device), "desc": "original_tokenizer",
-        "tokens_for_log": tokenizer.tokenize(prompt_text)
-    })
+    if isinstance(tokenizer, BPEAlternativeTokenizer):
+        encoded_inputs = tokenizer.encode(prompt_text, n=n, return_tensors="pt", add_special_tokens=True)
+        for encoded_input in encoded_inputs:
+            input_variants.append({
+                "tensor": encoded_input.to(device), "desc": "random_tokenizer",
+                "tokens_for_log": tokenizer.convert_ids_to_tokens(encoded_input[0])
+            })
+    else:
+        encoded_input = tokenizer.encode(prompt_text, return_tensors="pt", add_special_tokens=True)
+        input_variants.append({
+            "tensor": encoded_input.to(device), "desc": "original_tokenizer",
+            "tokens_for_log": tokenizer.convert_ids_to_tokens(encoded_input[0])
+        })
 
     return input_variants
 
 def evaluate(args):
     model, tokenizer, device = setup_model_and_tokenizer(args.model_name)
+    if args.use_random_tokenizer:
+        random_tokenizer = initialize_random_tokenizer(tokenizer)
 
     if args.subject == "all":
         try:
@@ -120,9 +136,12 @@ def evaluate(args):
             if not choice_token_ids:
                 print(f"  Q{i+1} ({subject}) - Skipping, could not get choice tokens.")
                 continue
-
-            input_variants = get_input_variants(prompt_text, tokenizer, device)
             
+            if args.use_random_tokenizer:
+                input_variants = get_input_variants(prompt_text, random_tokenizer, device, args.num_tokenizations_samples)
+            else:
+                input_variants = get_input_variants(prompt_text, tokenizer, device)
+
             question_answered_correctly = False
             for variant in input_variants:
                 predicted_char = evaluate_single_variant_by_prob(model, variant["tensor"], choice_token_ids)
@@ -165,6 +184,8 @@ if __name__ == "__main__":
     parser.add_argument("--model_name", type=str, required=True, help="Name of the model to evaluate")
     parser.add_argument("--subject", type=str, default="all", help="Subject to evaluate (default: all)")
     parser.add_argument("--num_samples", type=int, default=None, help="Number of samples to evaluate (default: all)")
+    parser.add_argument("--use_random_tokenizer", action="store_true", help="Use random tokenizer for generating alternatives")
+    parser.add_argument("--num_tokenizations_samples", type=int, default=10, help="Number of alternative tokenizations to generate (default: 10)")
     args = parser.parse_args()
 
     evaluate(args)
