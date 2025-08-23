@@ -7,6 +7,7 @@ if project_root not in sys.path:
 import argparse
 import torch
 import json
+import numpy as np
 
 from tqdm import tqdm
 from datasets import load_dataset
@@ -66,7 +67,7 @@ def evaluate_single_variant_by_prob(model, input_tensor, choice_token_ids):
         next_token_probs = torch.softmax(next_token_logits, dim=-1)
 
     best_choice_char = None
-    max_prob = -1.0
+    max_prob = -np.inf
 
     for char, token_id in choice_token_ids.items():
         prob = next_token_probs[0, token_id].item()
@@ -135,8 +136,8 @@ def evaluate(args):
 
         for i, item in enumerate(tqdm(dataset, desc=f"Subject {subject}")):
             prompt_text = build_prompt(item["question"], item["choices"])
-            actual_answer_index = item["answer"].strip()
-            actual_answer_char = chr(65 + int(actual_answer_index) - 1)
+            actual_answer_index = item["answer"]
+            actual_answer_char = chr(65 + int(actual_answer_index))
 
             choice_token_ids = get_choice_tokens(tokenizer, len(item["choices"]))
             if not choice_token_ids:
