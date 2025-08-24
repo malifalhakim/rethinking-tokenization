@@ -86,7 +86,7 @@ def get_input_variants(prompt_text, tokenizer, device, n=10):
         for encoded_input in encoded_inputs:
             input_variants.append({
                 "tensor": encoded_input.to(device), "desc": "random_tokenizer",
-                "tokens_for_log": tokenizer.convert_ids_to_tokens(encoded_input[0])
+                "tokens_for_log": tokenizer.tokenizer.convert_ids_to_tokens(encoded_input[0])
             })
     else:
         encoded_input = tokenizer.encode(prompt_text, return_tensors="pt", add_special_tokens=True)
