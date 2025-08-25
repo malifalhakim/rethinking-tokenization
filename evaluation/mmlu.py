@@ -16,11 +16,16 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from tokenizer.bpe_random_tokenizer import BPEAlternativeTokenizer
 
-def setup_model_and_tokenizer(model_name):
+def setup_model_and_tokenizer(model_name, device_arg=None):
     """Loads the model and tokenizer and sets the device."""
     tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModelForCausalLM.from_pretrained(model_name, device_map="auto")
-
+    if device_arg:
+        if device_arg.startswith("cuda") and not torch.cuda.is_available():
+            raise RuntimeError("CUDA requested but not available.")
+        model = AutoModelForCausalLM.from_pretrained(model_name)
+        model.to(device_arg)
+    else:
+        model = AutoModelForCausalLM.from_pretrained(model_name, device_map="auto")
     return model, tokenizer
 
 def build_prompt(question, choices):
@@ -60,6 +65,10 @@ def evaluate_single_variant_by_prob(model, input_tensor, choice_token_ids):
     Runs model inference and returns the choice with the highest probability.
     """
     model.eval()
+    
+    target_device = next(model.parameters()).device
+    input_tensor = input_tensor.to(target_device)
+
     with torch.no_grad():
         outputs = model(input_tensor)
         next_token_logits = outputs.logits[:, -1, :]
@@ -97,7 +106,7 @@ def get_input_variants(prompt_text, tokenizer, n=10):
     return input_variants
 
 def evaluate(args):
-    model, tokenizer = setup_model_and_tokenizer(args.model_name)
+    model, tokenizer = setup_model_and_tokenizer(args.model_name, args.device)
     if args.use_random_tokenizer:
         random_tokenizer = initialize_random_tokenizer(tokenizer)
 
@@ -107,6 +116,7 @@ def evaluate(args):
             subjects = list(dataset_info["test"].unique("subject"))
         except Exception as e:
             print(f"Could not load 'all' subjects configuration for cais/mmlu: {e}")
+            subjects = []
     else:
         subjects = [args.subject]
 
@@ -197,6 +207,7 @@ if __name__ == "__main__":
     parser.add_argument("--num_samples", type=int, default=None, help="Number of samples to evaluate (default: all)")
     parser.add_argument("--use_random_tokenizer", action="store_true", help="Use random tokenizer for generating alternatives")
     parser.add_argument("--num_tokenizations_samples", type=int, default=8, help="Number of alternative tokenizations to generate (default: 8)")
+    parser.add_argument("--device", type=str, default=None, help="Device, e.g. cuda:0, cuda:1, cpu. If omitted uses device_map=auto.")
     args = parser.parse_args()
 
     evaluate(args)
