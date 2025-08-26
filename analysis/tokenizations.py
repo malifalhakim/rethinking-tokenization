@@ -9,14 +9,16 @@ import json
 import matplotlib.pyplot as plt
 
 from quantifier.efficiency.renyi import renyi_score
-from quantifier.trainness.entropy import get_entropy_score
+from quantifier.trainness.entropy import TokenEntropy
+
+from transformers import AutoTokenizer
 
 def read_json(file_path: str) -> dict:
     """Reads a JSON file and returns its content as a dictionary."""
     with open(file_path, 'r', encoding='utf-8') as f:
         return json.load(f)
 
-def get_tokenizations_data(subject: str, question_index: int, raw_data: list) -> list:
+def get_tokenizations_data(subject: str, question_index: int, raw_data: list, entropy_calculator: TokenEntropy) -> list:
     """Get tokenizations used for a specific subject & question_index."""
     tokenizations = []
     for detail in raw_data:
@@ -26,7 +28,7 @@ def get_tokenizations_data(subject: str, question_index: int, raw_data: list) ->
                 {
                     "candidate_description": detail.get('candidate_description'),
                     "tokens_used": tokens_used,
-                    "entropy": get_entropy_score(tokens_used),
+                    "entropy": entropy_calculator.get_entropy_score(tokens_used),
                     "renyi": renyi_score(tokens_used),
                     "is_correct": detail.get('is_correct')
                 }
@@ -82,8 +84,13 @@ def main(args):
     raw_data_1 = read_json(args.input_1)["per_candidate_results"]
     raw_data_2 = read_json(args.input_2)["per_candidate_results"]
 
-    tokenizations_1 = get_tokenizations_data(args.subject, args.question_index, raw_data_1)
-    tokenizations_2 = get_tokenizations_data(args.subject, args.question_index, raw_data_2)
+    tokenizer = AutoTokenizer.from_pretrained(args.tokenizer_name)
+    entropy_calculator = TokenEntropy(args.entropy_file, tokenizer)
+
+    tokenizations_1 = get_tokenizations_data(
+        subject=args.subject, question_index=args.question_index, raw_data=raw_data_1, entropy_calculator=entropy_calculator)
+    tokenizations_2 = get_tokenizations_data(
+        subject=args.subject, question_index=args.question_index, raw_data=raw_data_2, entropy_calculator=entropy_calculator)
 
     plot_entropy_renyi_scatter(
         tokenizations_1,
@@ -100,5 +107,7 @@ if __name__ == "__main__":
     parser.add_argument("--subject", type=str, default='abstract_algebra', help="Subject name.")
     parser.add_argument("--question_index", type=int, default=1, help="Question index.")
     parser.add_argument("--annotate", action="store_true", help="Annotate points with candidate descriptions.")
+    parser.add_argument('--entropy_file', type=str, required=True, help="Path to token entropy JSON file.")
+    parser.add_argument('--tokenizer_name', type=str, required=True, help="Tokenizer name or path.")
     args = parser.parse_args()
     main(args)
