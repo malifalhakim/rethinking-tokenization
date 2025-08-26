@@ -11,6 +11,10 @@ from glitchminer import GlitchMiner, entropy
 from glitchminer.llm_template import get_template_for_model
 from glitchminer.tokenfilter import TokenFilter
 
+def entropy(probs):
+    """Calculates the entropy of a probability distribution."""
+    return -torch.sum(probs * torch.log(probs + 1e-6), dim=-1)
+
 def setup_model_and_tokenizer(model_name, device_arg=None):
     """Loads the model and tokenizer and sets the device."""
     tokenizer = AutoTokenizer.from_pretrained(model_name)
