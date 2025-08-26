@@ -7,7 +7,7 @@ import torch
 import torch.nn.functional as F
 
 from transformers import AutoTokenizer, AutoModelForCausalLM
-from glitchminer import GlitchMiner, entropy
+from glitchminer import GlitchMiner
 from glitchminer.llm_template import get_template_for_model
 from glitchminer.tokenfilter import TokenFilter
 
