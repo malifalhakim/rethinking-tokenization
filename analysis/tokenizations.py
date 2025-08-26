@@ -7,6 +7,7 @@ if project_root not in sys.path:
 import argparse
 import json
 import matplotlib.pyplot as plt
+from typing import List, Set
 
 from quantifier.efficiency.renyi import renyi_score
 from quantifier.trainness.entropy import TokenEntropy
@@ -17,6 +18,29 @@ def read_json(file_path: str) -> dict:
     """Reads a JSON file and returns its content as a dictionary."""
     with open(file_path, 'r', encoding='utf-8') as f:
         return json.load(f)
+    
+def is_random_bpe(
+    alternative_tokenizations: List[str], 
+    canonical_tokenization: List[str]
+) -> bool:
+    """
+    Efficiently checks if any token in canonical_tokenization is formed by 
+    concatenating two or more adjacent tokens from alternative_tokenizations.
+    """
+    if len(alternative_tokenizations) < 2:
+        return False
+
+
+    possible_concatenations: Set[str] = set()
+    n = len(alternative_tokenizations)
+    for i in range(n - 1):
+        current_concat = alternative_tokenizations[i]
+        for j in range(i + 1, n):
+            current_concat += alternative_tokenizations[j]
+            possible_concatenations.add(current_concat)
+
+    return any(token in possible_concatenations for token in canonical_tokenization)
+
 
 def get_tokenizations_data(subject: str, question_index: int, raw_data: list, entropy_calculator: TokenEntropy) -> list:
     """Get tokenizations used for a specific subject & question_index."""
@@ -34,6 +58,14 @@ def get_tokenizations_data(subject: str, question_index: int, raw_data: list, en
                 }
             )
     return tokenizations
+
+def filter_tokenizations_data(alternative_tokenizations: List[dict], canonical_tokenization: List[str]) -> List[dict]:
+    """Filter alternative tokenizations to only those that are not random BPE of canonical tokenizations."""
+    filtered = []
+    for alt in alternative_tokenizations:
+        if not is_random_bpe(alt['tokens_used'], canonical_tokenization):
+            filtered.append(alt)
+    return filtered
 
 def plot_entropy_renyi_scatter(tokenizations_1: list, tokenizations_2: list,
                                label1: str = "Data 1", label2: str = "Data 2",
@@ -91,6 +123,9 @@ def main(args):
         subject=args.subject, question_index=args.question_index, raw_data=raw_data_1, entropy_calculator=entropy_calculator)
     tokenizations_2 = get_tokenizations_data(
         subject=args.subject, question_index=args.question_index, raw_data=raw_data_2, entropy_calculator=entropy_calculator)
+    
+    if args.filter_random_bpe:
+        tokenizations_2 = filter_tokenizations_data(tokenizations_2, tokenizations_1[0]['tokens_used'])
 
     plot_entropy_renyi_scatter(
         tokenizations_1,
@@ -109,5 +144,6 @@ if __name__ == "__main__":
     parser.add_argument("--annotate", action="store_true", help="Annotate points with candidate descriptions.")
     parser.add_argument('--entropy_file', type=str, required=True, help="Path to token entropy JSON file.")
     parser.add_argument('--tokenizer_name', type=str, required=True, help="Tokenizer name or path.")
+    parser.add_argument('--filter_random_bpe', action="store_true", help="Filter out random BPE tokenizations.")
     args = parser.parse_args()
     main(args)

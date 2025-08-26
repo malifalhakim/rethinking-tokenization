@@ -5,13 +5,14 @@ import json
 
 import matplotlib.pyplot as plt
 import numpy as np
+from typing import List
 
 def read_json(file_path: str) -> dict:
     """Reads a JSON file and returns its content as a dictionary."""
     with open(file_path, 'r', encoding='utf-8') as f:
         return json.load(f)
     
-def extract_accuracy(text: str) -> [float, float]:
+def extract_accuracy(text: str) -> List[float]:
     """Extract accuracy and number of correct from string 'accuracy (number of correct / total question)"""
     match = re.search(r"(\d+\.\d+)\s\((\d+)/\d+\)", text)
     if match:
