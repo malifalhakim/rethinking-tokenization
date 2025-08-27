@@ -84,7 +84,7 @@ def evaluate_single_variant_by_prob(model, input_tensor, choice_token_ids):
             max_prob = prob
             best_choice_char = char
             
-    return best_choice_char
+    return best_choice_char, np.round(max_prob, 4)
 
 def get_input_variants(prompt_text, tokenizer, n=10):
     """Generates a list of input tensors based on the chosen tokenization strategy."""
@@ -155,7 +155,7 @@ def evaluate(args):
 
             question_answered_correctly = False
             for variant in input_variants:
-                predicted_char = evaluate_single_variant_by_prob(model, variant["tensor"], choice_token_ids)
+                predicted_char, prob = evaluate_single_variant_by_prob(model, variant["tensor"], choice_token_ids)
                 is_correct = (predicted_char == actual_answer_char)
                 if is_correct:
                     question_answered_correctly = True
@@ -164,7 +164,8 @@ def evaluate(args):
                 stats["per_candidate_results"].append({
                     "subject": subject, "question_index": i + 1, "candidate_description": variant['desc'],
                     "predicted_char": predicted_char, "correct_char": actual_answer_char, "is_correct": is_correct,
-                    "tokens_used": variant['tokens_for_log']
+                    "tokens_used": variant['tokens_for_log'],
+                    "probability": prob,
                 })
 
             if question_answered_correctly:
