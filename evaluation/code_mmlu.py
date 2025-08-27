@@ -15,6 +15,7 @@ from datasets import load_dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from tokenizer.bpe_random_tokenizer import BPEAlternativeTokenizer
+from tokenizer.bpe_random_tokenizer_filtered import BPEAlternativeTokenizerFiltered
 
 def setup_model_and_tokenizer(model_name, device_arg=None):
     """Loads the model and tokenizer and sets the device."""
@@ -37,8 +38,10 @@ def build_prompt(question, choices):
     prompt_text += "Answer:"
     return prompt_text
 
-def initialize_random_tokenizer(tokenizer):
+def initialize_random_tokenizer(tokenizer, type:str="default"):
     """Initializes the random tokenizer."""
+    if type == "filtered":
+        return BPEAlternativeTokenizerFiltered(tokenizer)
     return BPEAlternativeTokenizer(tokenizer)
 
 def get_choice_tokens(tokenizer, num_choices=4):
@@ -109,7 +112,7 @@ def get_input_variants(prompt_text, tokenizer, n=10):
 def evaluate(args):
     model, tokenizer = setup_model_and_tokenizer(args.model_name, args.device)
     if args.use_random_tokenizer:
-        random_tokenizer = initialize_random_tokenizer(tokenizer)
+        random_tokenizer = initialize_random_tokenizer(tokenizer, args.type)
 
     if args.subject == "all":
         subjects = ['api_frameworks', 'code_completion', 'code_repair', 'dbms_sql', 'execution_prediction', 'fill_in_the_middle', 'others', 'programming_syntax', 'software_principles']
@@ -202,6 +205,7 @@ if __name__ == "__main__":
     parser.add_argument("--subject", type=str, default="all", help="Subject to evaluate (default: all)")
     parser.add_argument("--num_samples", type=int, default=None, help="Number of samples to evaluate (default: all)")
     parser.add_argument("--use_random_tokenizer", action="store_true", help="Use random tokenizer for generating alternatives")
+    parser.add_argument("--type", type=str, default="default", choices=["default", "filtered"], help="Type of random tokenizer to use (default or filtered)")
     parser.add_argument("--num_tokenizations_samples", type=int, default=8, help="Number of alternative tokenizations to generate (default: 8)")
     parser.add_argument("--device", type=str, default=None, help="Device to run the model on (e.g., 'cpu', 'cuda:0'). Default is automatic device mapping.")
     args = parser.parse_args()
