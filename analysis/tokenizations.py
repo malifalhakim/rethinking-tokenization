@@ -7,10 +7,11 @@ if project_root not in sys.path:
 import argparse
 import json
 import matplotlib.pyplot as plt
-from typing import List, Set
+from typing import List
 
 from quantifier.efficiency.renyi import renyi_score
 from quantifier.trainness.entropy import TokenEntropy
+from tokenizer.bpe_random_tokenizer_filtered import is_random_bpe
 
 from transformers import AutoTokenizer
 
@@ -18,29 +19,6 @@ def read_json(file_path: str) -> dict:
     """Reads a JSON file and returns its content as a dictionary."""
     with open(file_path, 'r', encoding='utf-8') as f:
         return json.load(f)
-    
-def is_random_bpe(
-    alternative_tokenizations: List[str], 
-    canonical_tokenization: List[str]
-) -> bool:
-    """
-    Efficiently checks if any token in canonical_tokenization is formed by 
-    concatenating two or more adjacent tokens from alternative_tokenizations.
-    """
-    if len(alternative_tokenizations) < 2:
-        return False
-
-
-    possible_concatenations: Set[str] = set()
-    n = len(alternative_tokenizations)
-    for i in range(n - 1):
-        current_concat = alternative_tokenizations[i]
-        for j in range(i + 1, n):
-            current_concat += alternative_tokenizations[j]
-            possible_concatenations.add(current_concat)
-
-    return any(token in possible_concatenations for token in canonical_tokenization)
-
 
 def get_tokenizations_data(subject: str, question_index: int, raw_data: list, entropy_calculator: TokenEntropy) -> list:
     """Get tokenizations used for a specific subject & question_index."""

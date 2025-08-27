@@ -85,8 +85,8 @@ class BPEAlternativeTokenizer:
                     alternatives.append(list(tokenization_tuple))
 
         return alternatives
-    
-    def encode(self, text, n=10, return_tensors='pt', add_special_tokens=True):
+
+    def encode(self, text:str, n:int=10, return_tensors:str='pt', add_special_tokens:bool=True):
         """
         Encodes the text into token IDs, generating N alternative tokenizations.
         """
