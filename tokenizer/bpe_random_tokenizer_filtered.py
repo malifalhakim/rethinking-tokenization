@@ -81,46 +81,48 @@ class BPEAlternativeTokenizerFiltered(BPEAlternativeTokenizer):
         Generates up to n alternative tokenizations that are NOT random BPE
         segmentations of the canonical tokenization by validating at the word level.
         """
-        canonical_tokens = self.tokenizer.tokenize(text)
-        canonical_tuple = tuple(canonical_tokens)
         pre_words = self._get_pre_tokenized_words(text)
 
-        collected = []
-        seen = {canonical_tuple}
+        canonical_tokens = tuple(self.tokenizer.tokenize(text))
+        generated_tokenizations = {canonical_tokens}
+        alternatives = []
+        
         max_attempts = n * 10 + 50 
-
         for _ in range(max_attempts):
-            if len(collected) >= n:
+            if len(alternatives) >= n:
                 break
 
             current_full_tokenization = []
-            possible_to_build = True
 
-            for word in pre_words:
-                canonical_word_tokens = self.tokenizer.tokenize(word)
-                
+            for word, offset in pre_words:
+                begin, end = offset
+                canonical_word_tokens = self.tokenizer.tokenize(text[begin:end])
+
                 word_level_max_attempts = 10
+                found_alternative_for_word = False
                 for _ in range(word_level_max_attempts):
                     word_tokens = self._generate_one_word_tokenization(word)
 
                     if word_tokens is None:
                         current_full_tokenization.append(word)
+                        found_alternative_for_word = True
                         break
 
                     if not self.is_random_bpe(word_tokens, canonical_word_tokens):
                         current_full_tokenization.extend(word_tokens)
+                        found_alternative_for_word = True
                         break 
-                else:
-                    possible_to_build = False
-                    break
-            
-            if not possible_to_build:
-                continue
+                
+                if not found_alternative_for_word:
+                    current_full_tokenization.extend(canonical_word_tokens)
 
-            tok_tuple = tuple(current_full_tokenization)
-            if tok_tuple and tok_tuple not in seen:
-                seen.add(tok_tuple)
-                collected.append(list(tok_tuple))
+            tokenization_tuple = tuple(current_full_tokenization)
+            if tokenization_tuple and tokenization_tuple not in generated_tokenizations:
+                generated_tokenizations.add(tokenization_tuple)
+                alternatives.append(list(tokenization_tuple))
+        
+        if not alternatives:
+            alternatives.append(list(canonical_tokens))
 
-        return collected
+        return alternatives
     

@@ -32,10 +32,12 @@ class BPEAlternativeTokenizer:
         """
         if isinstance(self.tokenizer, PreTrainedTokenizerFast):
             normalized_text = self.tokenizer.backend_tokenizer.normalizer.normalize_str(text)
-            return [word for word, _ in self.tokenizer.backend_tokenizer.pre_tokenizer.pre_tokenize_str(normalized_text)]
+            return self.tokenizer.backend_tokenizer.pre_tokenizer.pre_tokenize_str(normalized_text)
         else:
             print("WARNING: Using a non-fast tokenizer may lead to suboptimal results.")
-            return self.tokenizer.tokenize(text)
+            raise NotImplementedError(
+                "Non-fast tokenizers are not supported."
+            )
 
     def generate_alternatives(self, text: str, n: int) -> List[List[str]]:
         """
@@ -54,7 +56,7 @@ class BPEAlternativeTokenizer:
 
             current_full_tokenization = []
             
-            for word in pre_words:
+            for word, _ in pre_words:
                 nodes = [[] for _ in range(len(word) + 1)]
                 nodes[0].append(0)
                 for i in range(1, len(word) + 1):
