@@ -9,6 +9,11 @@ import json
 import matplotlib.pyplot as plt
 from typing import List
 
+try:
+    import mplcursors
+except ImportError:
+    mplcursors = None
+
 from quantifier.efficiency.renyi import renyi_score
 from quantifier.trainness.entropy import TokenEntropy
 from tokenizer.bpe_random_tokenizer_filtered import is_random_bpe
@@ -47,7 +52,8 @@ def filter_tokenizations_data(alternative_tokenizations: List[dict], canonical_t
 
 def plot_entropy_renyi_scatter(tokenizations_1: list, tokenizations_2: list,
                                label1: str = "Data 1", label2: str = "Data 2",
-                               annotate: bool = False):
+                               annotate: bool = False,
+                               hover: bool = False):
     """
     Scatter plot: x = entropy, y = renyi to compare tokenizations quantifier.
     """
@@ -61,16 +67,20 @@ def plot_entropy_renyi_scatter(tokenizations_1: list, tokenizations_2: list,
     fig, ax = plt.subplots(figsize=(8, 6))
 
     plotted_labels = set()
+    scatter_artists = []
+    descriptions = []
 
     def plot_group(data, tag):
         for item in data:
             key = (tag, bool(item['is_correct']))
             style = style_map[key]
             lbl = style['label'] if style['label'] not in plotted_labels else None
-            ax.scatter(item['entropy'], item['renyi'],
-                       c=style['color'], marker=style['marker'],
-                       edgecolors='black', linewidths=0.6, s=70, alpha=0.85,
-                       label=lbl)
+            sc = ax.scatter(item['entropy'], item['renyi'],
+                            c=style['color'], marker=style['marker'],
+                            edgecolors='black', linewidths=0.6, s=70, alpha=0.85,
+                            label=lbl)
+            scatter_artists.append(sc)
+            descriptions.append(item.get('tokens_used', ''))
             if lbl:
                 plotted_labels.add(style['label'])
             if annotate:
@@ -87,6 +97,23 @@ def plot_entropy_renyi_scatter(tokenizations_1: list, tokenizations_2: list,
     ax.set_title('Entropy vs Rényi Tokenization Scatter', fontweight='bold')
     ax.grid(alpha=0.3, linestyle='--')
     ax.legend(frameon=False, fontsize=9)
+
+    if hover:
+        if mplcursors is None:
+            print("mplcursors not installed. Install with: pip install mplcursors")
+        else:
+            cursor = mplcursors.cursor(scatter_artists, hover=True)
+
+            @cursor.connect("add")
+            def on_add(sel):
+                try:
+                    idx = scatter_artists.index(sel.artist)
+                except ValueError:
+                    idx = -1
+                text = descriptions[idx] if idx >= 0 else ""
+                sel.annotation.set_text(text)
+                sel.annotation.get_bbox_patch().set(fc="white", alpha=0.9, edgecolor="#333")
+
     plt.tight_layout()
     plt.show()
 
@@ -110,8 +137,20 @@ def main(args):
         tokenizations_2,
         label1=os.path.basename(args.input_1),
         label2=os.path.basename(args.input_2),
-        annotate=args.annotate
+        annotate=args.annotate,
+        hover=args.hover
     )
+
+    if args.run_diff:
+        print("\n=== Running tokenization difference analysis ===\n")
+        from tokenization_difference import main as diff_main
+        diff_args = argparse.Namespace(
+            input_1=args.input_1,
+            input_2=args.input_2,
+            subject=args.subject,
+            question_index=args.question_index
+        )
+        diff_main(diff_args)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Compare tokenizations for a specific question.")
@@ -123,5 +162,7 @@ if __name__ == "__main__":
     parser.add_argument('--entropy_file', type=str, required=True, help="Path to token entropy JSON file.")
     parser.add_argument('--tokenizer_name', type=str, required=True, help="Tokenizer name or path.")
     parser.add_argument('--filter_random_bpe', action="store_true", help="Filter out random BPE tokenizations.")
+    parser.add_argument('--hover', action="store_true", help="Enable hover tooltips (requires mplcursors).")
+    parser.add_argument('--run_diff', action="store_true", help="After plotting, run tokenization_difference diff output.")
     args = parser.parse_args()
     main(args)
