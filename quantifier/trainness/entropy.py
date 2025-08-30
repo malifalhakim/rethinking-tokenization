@@ -1,5 +1,6 @@
 from typing import List, Dict
 import json
+import numpy as np
 
 class TokenEntropy:
     def __init__(self, file_path: str, tokenizer):
@@ -21,11 +22,18 @@ class TokenEntropy:
         """Process the raw data into a more usable format."""
         return {item["token_id"]: (item["token"], item["entropy"]) for item in raw_data if "token_id" in item and "token" in item and "entropy" in item}
 
-    def get_entropy_score(self, tokenization: List[str]) -> float:
+    def get_score(self, tokenization: List[str]) -> float:
         """Average entropy of provided tokens (missing tokens count as 0)."""
         if not tokenization:
             return 0.0
         
         ids_tokenization = self.tokenizer.convert_tokens_to_ids(tokenization)
-        total = sum(self.entropy_map.get(token_id, (None, 0.0))[1] for token_id in ids_tokenization)
-        return total / len(ids_tokenization)
+        entropys = []
+        count = 0
+        for token_id in ids_tokenization:
+            entropy = self.entropy_map.get(token_id, (None, None))[1]
+            if not entropy:
+                continue
+            entropys.append(entropy)
+            count += 1
+        return sum(entropys) / count if count > 0 else 0.0

@@ -16,6 +16,7 @@ except ImportError:
 
 from quantifier.efficiency.renyi import renyi_score
 from quantifier.trainness.entropy import TokenEntropy
+from quantifier.trainness.magikarp import TokenNorm
 from tokenizer.bpe_random_tokenizer_filtered import is_random_bpe
 
 from transformers import AutoTokenizer
@@ -25,7 +26,7 @@ def read_json(file_path: str) -> dict:
     with open(file_path, 'r', encoding='utf-8') as f:
         return json.load(f)
 
-def get_tokenizations_data(subject: str, question_index: int, raw_data: list, entropy_calculator: TokenEntropy) -> list:
+def get_tokenizations_data(subject: str, question_index: int, raw_data: list, calculator: TokenEntropy|TokenNorm) -> list:
     """Get tokenizations used for a specific subject & question_index."""
     tokenizations = []
     for detail in raw_data:
@@ -35,7 +36,7 @@ def get_tokenizations_data(subject: str, question_index: int, raw_data: list, en
                 {
                     "candidate_description": detail.get('candidate_description'),
                     "tokens_used": tokens_used,
-                    "entropy": entropy_calculator.get_entropy_score(tokens_used),
+                    "trainness_score": calculator.get_score(tokens_used),
                     "renyi": renyi_score(tokens_used),
                     "is_correct": detail.get('is_correct')
                 }
@@ -75,7 +76,7 @@ def plot_entropy_renyi_scatter(tokenizations_1: list, tokenizations_2: list,
             key = (tag, bool(item['is_correct']))
             style = style_map[key]
             lbl = style['label'] if style['label'] not in plotted_labels else None
-            sc = ax.scatter(item['entropy'], item['renyi'],
+            sc = ax.scatter(item['trainness_score'], item['renyi'],
                             c=style['color'], marker=style['marker'],
                             edgecolors='black', linewidths=0.6, s=70, alpha=0.85,
                             label=lbl)
@@ -84,7 +85,7 @@ def plot_entropy_renyi_scatter(tokenizations_1: list, tokenizations_2: list,
             if lbl:
                 plotted_labels.add(style['label'])
             if annotate:
-                ax.text(item['entropy'], item['renyi'],
+                ax.text(item['trainness_score'], item['renyi'],
                         item.get('candidate_description', ''),
                         fontsize=7, alpha=0.7,
                         ha='left', va='bottom')
@@ -92,9 +93,9 @@ def plot_entropy_renyi_scatter(tokenizations_1: list, tokenizations_2: list,
     plot_group(tokenizations_1, 'data1')
     plot_group(tokenizations_2, 'data2')
 
-    ax.set_xlabel('Entropy', fontsize=12)
+    ax.set_xlabel('trainness_score', fontsize=12)
     ax.set_ylabel('Rényi score', fontsize=12)
-    ax.set_title('Entropy vs Rényi Tokenization Scatter', fontweight='bold')
+    ax.set_title('trainness_score vs Rényi Tokenization Scatter', fontweight='bold')
     ax.grid(alpha=0.3, linestyle='--')
     ax.legend(frameon=False, fontsize=9)
 
@@ -122,12 +123,17 @@ def main(args):
     raw_data_2 = read_json(args.input_2)["per_candidate_results"]
 
     tokenizer = AutoTokenizer.from_pretrained(args.tokenizer_name)
-    entropy_calculator = TokenEntropy(args.entropy_file, tokenizer)
+    if args.entropy_file:
+        calculator = TokenEntropy(args.entropy_file, tokenizer)
+    elif args.magikarp_file:
+        calculator = TokenNorm(args.magikarp_file, tokenizer)
+    else:
+        print("Error: Either --entropy_file or --magikarp_file must be provided.")
 
     tokenizations_1 = get_tokenizations_data(
-        subject=args.subject, question_index=args.question_index, raw_data=raw_data_1, entropy_calculator=entropy_calculator)
+        subject=args.subject, question_index=args.question_index, raw_data=raw_data_1, calculator=calculator)
     tokenizations_2 = get_tokenizations_data(
-        subject=args.subject, question_index=args.question_index, raw_data=raw_data_2, entropy_calculator=entropy_calculator)
+        subject=args.subject, question_index=args.question_index, raw_data=raw_data_2, calculator=calculator)
     
     if args.filter_random_bpe:
         tokenizations_2 = filter_tokenizations_data(tokenizations_2, tokenizations_1[0]['tokens_used'])
@@ -159,7 +165,8 @@ if __name__ == "__main__":
     parser.add_argument("--subject", type=str, default='abstract_algebra', help="Subject name.")
     parser.add_argument("--question_index", type=int, default=1, help="Question index.")
     parser.add_argument("--annotate", action="store_true", help="Annotate points with candidate descriptions.")
-    parser.add_argument('--entropy_file', type=str, required=True, help="Path to token entropy JSON file.")
+    parser.add_argument('--magikarp_file', type=str, help="Path to Magikarp JSONL file.")
+    parser.add_argument('--entropy_file', type=str, help="Path to token entropy JSON file.")
     parser.add_argument('--tokenizer_name', type=str, required=True, help="Tokenizer name or path.")
     parser.add_argument('--filter_random_bpe', action="store_true", help="Filter out random BPE tokenizations.")
     parser.add_argument('--hover', action="store_true", help="Enable hover tooltips (requires mplcursors).")
