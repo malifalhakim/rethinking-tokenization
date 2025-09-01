@@ -186,8 +186,12 @@ def compute_welch_tests(df: pd.DataFrame, diff_cols: list[str]) -> pd.DataFrame:
 def compute_subject_stats(df: pd.DataFrame, subject_col: str) -> pd.DataFrame:
     """Per-subject wins/losses/ties.
 
-    baseline_win_rate = baseline_wins / (baseline_wins + alt_wins + ties)
-    Ties dilute the win rate; all-tie groups get 0.
+    Provides two win rates:
+      baseline_win_rate = baseline_wins / (baseline_wins + alt_wins)
+      baseline_win_rate_incl_ties = baseline_wins / (baseline_wins + alt_wins + ties)
+
+    Tie rows (-1) are excluded from other analyses but both rates are saved here.
+    Groups with only ties have NaN excl_ties and 0 incl_ties.
     """
     if subject_col not in df.columns:
         print(f"[warn] Subject column '{subject_col}' not in dataframe; skipping subject-level stats.")
@@ -199,15 +203,17 @@ def compute_subject_stats(df: pd.DataFrame, subject_col: str) -> pd.DataFrame:
     n_total = baseline_wins + alt_wins + ties
     n_effective = baseline_wins + alt_wins
     with np.errstate(divide="ignore", invalid="ignore"):
-        baseline_win_rate = baseline_wins / n_total.replace(0, np.nan)
-    baseline_win_rate = baseline_win_rate.fillna(0.0)
+        win_rate_excl = baseline_wins / n_effective
+        win_rate_incl = baseline_wins / n_total.replace(0, np.nan)
+    win_rate_incl = win_rate_incl.fillna(0.0)
     subject_stats = pd.DataFrame({
         "baseline_wins": baseline_wins,
         "alt_wins": alt_wins,
         "ties": ties,
         "n_total": n_total,
         "n_effective": n_effective,
-        "baseline_win_rate": baseline_win_rate,
+        "baseline_win_rate": win_rate_excl,
+        "baseline_win_rate_incl_ties": win_rate_incl,
     }).sort_values("baseline_win_rate", ascending=False)
     return subject_stats
 
@@ -346,7 +352,7 @@ def main():
 
     subject_stats = compute_subject_stats(df, args.subject_col)
     if not subject_stats.empty:
-        display_dataframe_to_user("Subject-level baseline win rates", subject_stats.reset_index())
+        display_dataframe_to_user("Subject-level baseline win rates (excl & incl ties)", subject_stats.reset_index())
         subject_stats.to_csv(out_dir / "subject_win_rates.csv", index=True)
 
     default_feature_cols = diff_cols

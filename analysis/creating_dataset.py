@@ -66,7 +66,7 @@ def create_dataset_list(tokenizer_name:str, entropy_file:str, magikarp_file:str,
             subject_alt = alternative_tokenization['subject']
             is_correct_alt = alternative_tokenization['is_correct']
             if (question_index == question_index_alt) and (subject == subject_alt):
-                label = -1 if is_correct == is_correct_alt else is_correct
+                label = -1 if is_correct == is_correct_alt else int(is_correct)
                 data_dict.append({
                     "subject": subject,
                     "question_index": question_index,
