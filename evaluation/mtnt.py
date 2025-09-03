@@ -125,7 +125,7 @@ def evaluate(args):
     predictions = []
     references = []
 
-    for i, row in enumerate(tqdm(dataset.itertuples(), total=len(dataset), desc=f"Translating {args.lang_pair}")):
+    for i, row in enumerate(tqdm(dataset.itertuples(), total=len(dataset), desc=f"Translating {lang_pair}")):
         source_text = row.original_text
         reference_text = row.translated_text
 
@@ -164,7 +164,7 @@ def evaluate(args):
         print("No samples were evaluated.")
     
     safe_model_name = args.model_name.replace('/', '_')
-    output_filename = f"mt_evaluation_stats_{safe_model_name}_{args.lang_pair}.json"
+    output_filename = f"mt_evaluation_stats_{safe_model_name}_{lang_pair}.json"
     with open(output_filename, 'w', encoding='utf-8') as f:
         json.dump(stats, f, indent=4, ensure_ascii=False)
     print(f"\nEvaluation statistics saved to {output_filename}")

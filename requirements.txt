@@ -5,3 +5,5 @@ accelerate
 numpy
 git+https://github.com/wooozihui/GlitchMiner.git
 tokenization-scorer
+evaluate
+sacrebleu
