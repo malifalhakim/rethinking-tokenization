@@ -7,21 +7,21 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from tokenizer.bpe_random_tokenizer_filtered import BPEAlternativeTokenizerFiltered
-from quantifier.trainness.entropy import TokenEntropy
+from quantifier.trainness.magikarp import TokenNorm
 
-class BPEEntropyTokenizer(BPEAlternativeTokenizerFiltered):
+class BPENormTokenizer(BPEAlternativeTokenizerFiltered):
     """
     A wrapper for BPE-based tokenizers that generates a single tokenization 
-    that aims to minimize the average token entropy, while also filtering out
+    that aims to maximize the average token norm, while also filtering out
     "random BPE" segmentations.
     """
 
-    def __init__(self, tokenizer, token_entropy: TokenEntropy):
+    def __init__(self, tokenizer, token_norm: TokenNorm):
         """
-        Initializes the entropy-based tokenizer.
+        Initializes the norm-based tokenizer.
         """
         super().__init__(tokenizer)
-        self.token_entropy = token_entropy
+        self.token_norm = token_norm
         self._memo_all_tokenizations: Dict[str, Optional[List[List[str]]]] = {}
 
     def _generate_all_word_tokenizations(self, word: str) -> Optional[List[List[str]]]:
@@ -67,7 +67,7 @@ class BPEEntropyTokenizer(BPEAlternativeTokenizerFiltered):
 
     def _find_best_word_tokenization(self, word: str, canonical_tokenization: List[str]) -> List[str]:
         """
-        Finds the tokenization for a single word that maximizes token entropy and is
+        Finds the tokenization for a single word that maximizes token norm and is
         not a "random BPE" segmentation.
         """
         all_tokenizations = self._generate_all_word_tokenizations(word)
@@ -76,7 +76,7 @@ class BPEEntropyTokenizer(BPEAlternativeTokenizerFiltered):
             return canonical_tokenization
 
         best_tokenization = canonical_tokenization
-        min_score = self.token_entropy.get_score(canonical_tokenization)
+        max_score = self.token_norm.get_score(canonical_tokenization)
 
         for tokenization in all_tokenizations:
             if tokenization == canonical_tokenization:
@@ -85,9 +85,9 @@ class BPEEntropyTokenizer(BPEAlternativeTokenizerFiltered):
             if self.is_random_bpe(tokenization, canonical_tokenization):
                 continue
             
-            score = self.token_entropy.get_score(tokenization)
-            if score < min_score:
-                min_score = score
+            score = self.token_norm.get_score(tokenization)
+            if score > max_score:
+                max_score = score
                 best_tokenization = tokenization
         
         return best_tokenization
@@ -95,7 +95,7 @@ class BPEEntropyTokenizer(BPEAlternativeTokenizerFiltered):
     def generate_best_tokenization(self, text: str) -> List[str]:
         """
         Generates a single tokenization for the entire text that aims to
-        maximize the overall average token entropy by optimizing word by word.
+        maximize the overall average token norm by optimizing word by word.
         """
         self._memo_all_tokenizations.clear()
         
@@ -114,9 +114,8 @@ class BPEEntropyTokenizer(BPEAlternativeTokenizerFiltered):
     def generate_alternatives(self, text: str, n: int = 1) -> List[List[str]]:
         """
         Overrides the parent method. Instead of generating random alternatives,
-        it returns a list containing only the single best tokenization based on entropy.
+        it returns a list containing only the single best tokenization based on norm.
         The 'n' parameter is ignored.
         """
         best_tokenization = self.generate_best_tokenization(text)
         return [best_tokenization]
-
