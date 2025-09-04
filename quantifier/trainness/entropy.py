@@ -1,6 +1,5 @@
 from typing import List, Dict
 import json
-import numpy as np
 
 class TokenEntropy:
     def __init__(self, file_path: str, tokenizer):
