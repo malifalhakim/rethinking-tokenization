@@ -33,7 +33,13 @@ def setup_model_and_tokenizer(model_name, device_arg=None):
 
 def build_translation_prompt(source_text, src_lang, tgt_lang):
     """Builds a prompt for the translation task."""
-    prompt_text = f"Translate the following text from {src_lang} to {tgt_lang}. Provide only the translated text.\n\n{src_lang}: {source_text}\n{tgt_lang}:"
+    map_langcode_to_name = {
+        "EN": "English",
+        "FR": "French",
+        "JA": "Japanese",
+    }
+
+    prompt_text = f"Translate the following text from {map_langcode_to_name.get(src_lang, src_lang)} to {map_langcode_to_name.get(tgt_lang, tgt_lang)}. Provide only the translated text.\n\n{src_lang}: {source_text}\n{tgt_lang}:"
     messages = [
         {"role": "user", "content": prompt_text}
     ]
