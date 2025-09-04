@@ -25,16 +25,20 @@ def setup_model_and_tokenizer(model_name, device_arg=None):
     if device_arg:
         if device_arg.startswith("cuda") and not torch.cuda.is_available():
             raise RuntimeError("CUDA requested but not available.")
-        model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=torch.bfloat16)
+        model = AutoModelForCausalLM.from_pretrained(model_name)
         model.to(device_arg)
     else:
-        model = AutoModelForCausalLM.from_pretrained(model_name, device_map="auto", torch_dtype=torch.bfloat16)
+        model = AutoModelForCausalLM.from_pretrained(model_name, device_map="auto")
     return model, tokenizer
 
 def build_translation_prompt(source_text, src_lang, tgt_lang):
     """Builds a prompt for the translation task."""
     prompt_text = f"Translate the following text from {src_lang} to {tgt_lang}. Provide only the translated text.\n\n{src_lang}: {source_text}\n{tgt_lang}:"
-    return prompt_text
+    messages = [
+        {"role": "user", "content": prompt_text}
+    ]
+
+    return messages
 
 def initialize_random_tokenizer(tokenizer, type: str = "default"):
     """
@@ -50,21 +54,23 @@ def get_input_variants(prompt_text, tokenizer, n=10):
     This structure is kept to match your original script.
     """
     input_variants = []
-    
     is_custom_tokenizer = isinstance(tokenizer, (BPEAlternativeTokenizer))
 
     if is_custom_tokenizer:
-        encoded_inputs = tokenizer.encode(prompt_text, n=n, return_tensors="pt", add_special_tokens=True)
+        base_tokenizer = tokenizer.tokenizer
+        formatted_prompt = base_tokenizer.apply_chat_template(prompt_text, tokenize=False, add_generation_prompt=True)
+
+        encoded_inputs = tokenizer.encode(formatted_prompt, n=n, return_tensors="pt", add_special_tokens=True)
         for i, encoded_input in enumerate(encoded_inputs):
             input_variants.append({
                 "tensor": encoded_input, "desc": f"random_tokenizer_variant_{i+1}",
-                "tokens_for_log": tokenizer.tokenizer.convert_ids_to_tokens(encoded_input[0])
+                "tokens_for_log": base_tokenizer.convert_ids_to_tokens(encoded_input[0])
             })
     else:
-        encoded_input = tokenizer(prompt_text, return_tensors="pt", add_special_tokens=True)
+        encoded_input_ids = tokenizer.apply_chat_template(prompt_text, return_tensors="pt", add_generation_prompt=True)
         input_variants.append({
-            "tensor": encoded_input.input_ids, "desc": "original_tokenizer",
-            "tokens_for_log": tokenizer.convert_ids_to_tokens(encoded_input.input_ids[0])
+            "tensor": encoded_input_ids, "desc": "original_tokenizer",
+            "tokens_for_log": tokenizer.convert_ids_to_tokens(encoded_input_ids[0])
         })
 
     return input_variants
@@ -83,7 +89,7 @@ def generate_translation(model, tokenizer, input_tensor, max_new_tokens=128):
             max_new_tokens=max_new_tokens,
             pad_token_id=tokenizer.pad_token_id,
             eos_token_id=tokenizer.eos_token_id,
-            do_sample=False # Using greedy decoding for consistency
+            do_sample=False
         )
 
     generated_text = tokenizer.decode(outputs[0][input_tensor.shape[1]:], skip_special_tokens=True)
