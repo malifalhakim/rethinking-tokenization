@@ -199,6 +199,8 @@ def evaluate(args):
     
     safe_model_name = args.model_name.replace('/', '_')
     output_filename = f"mmlu_evaluation_stats_{safe_model_name}.json"
+    if args.use_random_tokenizer:
+        output_filename = f"mmlu_evaluation_stats_{safe_model_name}_randtok_{args.type}.json"
     with open(output_filename, 'w') as f:
         json.dump(stats, f, indent=4)
     print(f"Evaluation statistics saved to {output_filename}")
