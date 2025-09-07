@@ -4,6 +4,7 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
+import random
 import gc
 import argparse
 import torch
@@ -16,6 +17,21 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from tokenizer.bpe_random_tokenizer import BPEAlternativeTokenizer
 from tokenizer.bpe_random_tokenizer_filtered import BPEAlternativeTokenizerFiltered
+from tokenizer.bpe_norm_tokenizer import BPENormTokenizer
+from tokenizer.bpe_entropy_tokenizer import BPEEntropyTokenizer
+from tokenizer.bpe_renyi_tokenizer import BPERenyiTokenizer
+
+from quantifier.trainness.magikarp import TokenNorm
+from quantifier.trainness.entropy import TokenEntropy
+
+def initialize_seed(seed):
+    """Initializes random seeds for reproducibility."""
+    if seed is not None:
+        random.seed(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
 
 def setup_model_and_tokenizer(model_name, device_arg=None):
     """Loads the model and tokenizer and sets the device."""
@@ -34,13 +50,19 @@ def build_prompt(question, choices):
     prompt_text = f"Question: {question}\n"
     for j, choice_text in enumerate(choices):
         prompt_text += f"{chr(65+j)}. {choice_text}\n"
-    prompt_text += "Answer:"
+    prompt_text += "Answer: "
     return prompt_text
 
-def initialize_random_tokenizer(tokenizer, type:str="default"):
+def initialize_random_tokenizer(tokenizer, type:str="default", calculator:TokenNorm|TokenEntropy=None):
     """Initializes the random tokenizer."""
     if type == "filtered":
         return BPEAlternativeTokenizerFiltered(tokenizer)
+    elif type == "norm":
+        return BPENormTokenizer(tokenizer, calculator=calculator)
+    elif type == "entropy":
+        return BPEEntropyTokenizer(tokenizer, calculator=calculator)
+    elif type == "renyi":
+        return BPERenyiTokenizer(tokenizer)
     return BPEAlternativeTokenizer(tokenizer)
 
 def get_choice_tokens(tokenizer, num_choices=4):
@@ -93,11 +115,12 @@ def get_input_variants(prompt_text, tokenizer, n=10):
     input_variants = []
 
     if isinstance(tokenizer, BPEAlternativeTokenizer):
+        base_tokenizer = tokenizer.tokenizer
         encoded_inputs = tokenizer.encode(prompt_text, n=n, return_tensors="pt", add_special_tokens=True)
         for encoded_input in encoded_inputs:
             input_variants.append({
-                "tensor": encoded_input, "desc": "random_tokenizer",
-                "tokens_for_log": tokenizer.tokenizer.convert_ids_to_tokens(encoded_input[0])
+                "tensor": encoded_input, "desc": "alternative_tokenizer",
+                "tokens_for_log": base_tokenizer.convert_ids_to_tokens(encoded_input[0])
             })
     else:
         encoded_input = tokenizer.encode(prompt_text, return_tensors="pt", add_special_tokens=True)
@@ -109,9 +132,21 @@ def get_input_variants(prompt_text, tokenizer, n=10):
     return input_variants
 
 def evaluate(args):
+    initialize_seed(args.seed)
     model, tokenizer = setup_model_and_tokenizer(args.model_name, args.device)
-    if args.use_random_tokenizer:
-        random_tokenizer = initialize_random_tokenizer(tokenizer, args.type)
+    if args.use_alternative_tokenizer:
+        calculator = None
+        if args.type == "norm":
+            file_path = args.quantifier_file
+            if not file_path:
+                raise ValueError("Quantifier file must be provided for 'norm' tokenizer type.")
+            calculator = TokenNorm(file_path, tokenizer)
+        elif args.type == "entropy":
+            file_path = args.quantifier_file
+            if not file_path:
+                raise ValueError("Quantifier file must be provided for 'entropy' tokenizer type.")
+            calculator = TokenEntropy(file_path, tokenizer)
+        random_tokenizer = initialize_random_tokenizer(tokenizer, args.type, calculator=calculator)
 
     if args.subject == "all":
         try:
@@ -156,7 +191,7 @@ def evaluate(args):
                 print(f"  Q{i+1} ({subject}) - Skipping, could not get choice tokens.")
                 continue
             
-            if args.use_random_tokenizer:
+            if args.use_alternative_tokenizer:
                 input_variants = get_input_variants(prompt_text, random_tokenizer, args.num_tokenizations_samples)
             else:
                 input_variants = get_input_variants(prompt_text, tokenizer)
@@ -199,8 +234,8 @@ def evaluate(args):
     
     safe_model_name = args.model_name.replace('/', '_')
     output_filename = f"mmlu_evaluation_stats_{safe_model_name}.json"
-    if args.use_random_tokenizer:
-        output_filename = f"mmlu_evaluation_stats_{safe_model_name}_randtok_{args.type}.json"
+    if args.use_alternative_tokenizer:
+        output_filename = f"mmlu_evaluation_stats_{safe_model_name}_altok_{args.type}.json"
     with open(output_filename, 'w') as f:
         json.dump(stats, f, indent=4)
     print(f"Evaluation statistics saved to {output_filename}")
@@ -211,10 +246,13 @@ if __name__ == "__main__":
     parser.add_argument("--model_name", type=str, required=True, help="Name of the model to evaluate")
     parser.add_argument("--subject", type=str, default="all", help="Subject to evaluate (default: all)")
     parser.add_argument("--num_samples", type=int, default=None, help="Number of samples to evaluate (default: all)")
-    parser.add_argument("--use_random_tokenizer", action="store_true", help="Use random tokenizer for generating alternatives")
-    parser.add_argument("--type", type=str, default="default", choices=["default", "filtered"], help="Type of random tokenizer to use (default or filtered)")
+    parser.add_argument("--use_alternative_tokenizer", action="store_true", help="Use random tokenizer for generating alternatives")
+    parser.add_argument("--type", type=str, default="default", choices=["default", "filtered", "norm", "entropy", "renyi"], help="Type of random tokenizer to use (default or filtered)")
     parser.add_argument("--num_tokenizations_samples", type=int, default=8, help="Number of alternative tokenizations to generate (default: 8)")
     parser.add_argument("--device", type=str, default=None, help="Device, e.g. cuda:0, cuda:1, cpu. If omitted uses device_map=auto.")
+    parser.add_argument("--quantifier_file", type=str, default=None, help="Path to quantifier file for norm/entropy tokenizers.")
+    parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility.")
+
     args = parser.parse_args()
 
     evaluate(args)

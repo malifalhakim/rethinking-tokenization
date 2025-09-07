@@ -18,6 +18,23 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from tokenizer.bpe_random_tokenizer import BPEAlternativeTokenizer
 from tokenizer.bpe_random_tokenizer_filtered import BPEAlternativeTokenizerFiltered
+from tokenizer.bpe_norm_tokenizer import BPENormTokenizer
+from tokenizer.bpe_entropy_tokenizer import BPEEntropyTokenizer
+from tokenizer.bpe_renyi_tokenizer import BPERenyiTokenizer
+
+from quantifier.trainness.magikarp import TokenNorm
+from quantifier.trainness.entropy import TokenEntropy
+
+def initialize_seed(seed: int):
+    """Initializes random seeds for reproducibility."""
+    if seed is not None:
+        import random
+        import numpy as np
+        random.seed(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
 
 def prepare_dataset(dataset_subset: str = "fr-en", src_lang: str = "en") -> tuple:
     """
@@ -78,15 +95,21 @@ def build_translation_prompt(source_text, src_lang, tgt_lang):
 
     return messages
 
-def initialize_random_tokenizer(tokenizer, type: str = "filtered"):
+def initialize_random_tokenizer(tokenizer, type: str = "filtered", calculator: TokenNorm|TokenEntropy=None):
     """
     Initializes your custom random tokenizer, imitating the mmlu.py structure.
     """
     if type == "filtered":
         return BPEAlternativeTokenizerFiltered(tokenizer)
+    elif type == "norm":
+        return BPENormTokenizer(tokenizer, calculator=calculator)
+    elif type == "entropy":
+        return BPEEntropyTokenizer(tokenizer, calculator=calculator)
+    elif type == "renyi":
+        return BPERenyiTokenizer(tokenizer)
     return BPEAlternativeTokenizer(tokenizer)
 
-def get_input_variants(prompt_text, tokenizer, n=10):
+def get_input_variants(messages, tokenizer, n=10):
     """
     Generates a list of input tensors based on the chosen tokenization strategy.
     This structure is kept to match your original script.
@@ -96,16 +119,16 @@ def get_input_variants(prompt_text, tokenizer, n=10):
 
     if is_custom_tokenizer:
         base_tokenizer = tokenizer.tokenizer
-        formatted_prompt = base_tokenizer.apply_chat_template(prompt_text, tokenize=False, add_generation_prompt=True)
+        formatted_prompt = base_tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
 
         encoded_inputs = tokenizer.encode(formatted_prompt, n=n, return_tensors="pt", add_special_tokens=True)
         for i, encoded_input in enumerate(encoded_inputs):
             input_variants.append({
-                "tensor": encoded_input, "desc": f"random_tokenizer_variant_{i+1}",
+                "tensor": encoded_input, "desc": f"alternative_tokenizer_variant_{i+1}",
                 "tokens_for_log": base_tokenizer.convert_ids_to_tokens(encoded_input[0])
             })
     else:
-        encoded_input_ids = tokenizer.apply_chat_template(prompt_text, return_tensors="pt", add_generation_prompt=True)
+        encoded_input_ids = tokenizer.apply_chat_template(messages, return_tensors="pt", add_generation_prompt=True)
         input_variants.append({
             "tensor": encoded_input_ids, "desc": "original_tokenizer",
             "tokens_for_log": tokenizer.convert_ids_to_tokens(encoded_input_ids[0])
@@ -135,12 +158,20 @@ def generate_translation(model, tokenizer, input_tensor, max_new_tokens=128):
 
 def evaluate(args):
     """Main evaluation function."""
+    initialize_seed(args.seed)
     model, tokenizer = setup_model_and_tokenizer(args.model_name, args.device)
     sacrebleu = evaluate_hf.load("sacrebleu")
     
-    eval_tokenizer = tokenizer
-    if args.use_random_tokenizer:
-        eval_tokenizer = initialize_random_tokenizer(tokenizer, args.type)
+    input_tokenizer = tokenizer
+    if args.use_alternative_tokenizer:
+        calculator = None
+        if args.type == "norm":
+            file_path = args.quantifier_file
+            calculator = TokenNorm(file_path, tokenizer)
+        elif args.type == "entropy":
+            file_path = args.quantifier_file
+            calculator = TokenEntropy(file_path, tokenizer)
+        input_tokenizer = initialize_random_tokenizer(tokenizer, args.type, calculator=calculator)
 
     dataset_subset = args.dataset_subset
     src_lang = args.src_lang
@@ -165,8 +196,8 @@ def evaluate(args):
         source_text = row.original_text
         reference_text = row.translated_text
 
-        prompt_text = build_translation_prompt(source_text, src_lang.upper(), tgt_lang.upper())
-        input_variants = get_input_variants(prompt_text, eval_tokenizer, args.num_tokenizations_samples)
+        messages = build_translation_prompt(source_text, src_lang.upper(), tgt_lang.upper())
+        input_variants = get_input_variants(messages, input_tokenizer, args.num_tokenizations_samples)
         
         best_score = -1.0
         best_prediction = ""
@@ -201,8 +232,8 @@ def evaluate(args):
     
     safe_model_name = args.model_name.replace('/', '_')
     output_filename = f"wmt_evaluation_stats_{safe_model_name}_{lang_pair}.json"
-    if args.use_random_tokenizer:
-        output_filename = f"wmt_evaluation_stats_{safe_model_name}_{lang_pair}_randtok_{args.type}.json"
+    if args.use_alternative_tokenizer:
+        output_filename = f"wmt_evaluation_stats_{safe_model_name}_{lang_pair}_altok_{args.type}.json"
     with open(output_filename, 'w', encoding='utf-8') as f:
         json.dump(stats, f, indent=4, ensure_ascii=False)
     print(f"\nEvaluation statistics saved to {output_filename}")
@@ -220,9 +251,11 @@ if __name__ == "__main__":
     parser.add_argument("--num_samples", type=int, default=None, help="Number of samples to evaluate. Default is all.")
     parser.add_argument("--device", type=str, default=None, help="Device to run the model on (e.g., 'cuda', 'cpu').")
     parser.add_argument("--max_new_tokens", type=int, default=256, help="Maximum number of new tokens to generate.")
-    parser.add_argument("--use_random_tokenizer", action="store_true", help="Use a random tokenizer variant.")
-    parser.add_argument("--type", type=str, choices=["standard", "filtered"], default="filtered", help="Type of random tokenizer to use.")
+    parser.add_argument("--use_alternative_tokenizer", action="store_true", help="Use a random tokenizer variant.")
+    parser.add_argument("--type", type=str, choices=["standard", "filtered", "norm", "entropy", "renyi"], default="filtered", help="Type of random tokenizer to use.")
     parser.add_argument("--num_tokenizations_samples", type=int, default=4, help="Number of tokenization samples for random tokenizer.")
+    parser.add_argument("--quantifier_file", type=str, default=None, help="Path to the quantifier file for norm/entropy tokenizers.")
+    parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility.")
 
     args = parser.parse_args()
 
