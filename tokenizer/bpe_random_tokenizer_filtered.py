@@ -5,6 +5,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 import random
+import re
 
 from tokenizer.bpe_random_tokenizer import BPEAlternativeTokenizer
 from typing import List, Set, Optional
@@ -37,6 +38,8 @@ class BPEAlternativeTokenizerFiltered(BPEAlternativeTokenizer):
     """
     def __init__(self, tokenizer):
         super().__init__(tokenizer)
+        self.protected_tokens = set(getattr(tokenizer, "all_special_tokens", []))
+        self._protected_like_pattern = ("<|", "|>")
 
     def is_random_bpe(
         self,
@@ -54,6 +57,9 @@ class BPEAlternativeTokenizerFiltered(BPEAlternativeTokenizer):
         Generates a single random tokenization for a word from its lattice.
         Returns None if the word cannot be tokenized.
         """
+        if word in self.protected_tokens or (word.startswith("<|") and word.endswith("|>")):
+            return [word]
+
         nodes = [[] for _ in range(len(word) + 1)]
         nodes[0].append(0)
         for i in range(1, len(word) + 1):
@@ -96,7 +102,17 @@ class BPEAlternativeTokenizerFiltered(BPEAlternativeTokenizer):
 
             for word, offset in pre_words:
                 begin, end = offset
-                canonical_word_tokens = self.tokenizer.tokenize(text[begin:end])
+                span_text = text[begin:end]
+                canonical_word_tokens = self.tokenizer.tokenize(span_text)
+
+                # If this span is already (exactly) a single protected token, keep it
+                if (
+                    (len(canonical_word_tokens) == 1 and canonical_word_tokens[0] in self.protected_tokens)
+                    or span_text in self.protected_tokens
+                    or (span_text.startswith("<|") and span_text.endswith("|>"))
+                ):
+                    current_full_tokenization.extend(canonical_word_tokens)
+                    continue
 
                 word_level_max_attempts = 10
                 found_alternative_for_word = False
@@ -125,4 +141,42 @@ class BPEAlternativeTokenizerFiltered(BPEAlternativeTokenizer):
             alternatives.append(list(canonical_tokens))
 
         return alternatives
-    
+
+    def _get_pre_tokenized_words(self, text: str):
+        """
+        Extends parent pre-tokenization by merging chat special tokens
+        that were split into pieces like: <| , im , _start , |> -> <|im_start|>
+        """
+        base = super()._get_pre_tokenized_words(text)
+        merged = []
+        i = 0
+        while i < len(base):
+            token, (s, e) = base[i]
+
+            if token == "<|" and i + 1 < len(base):
+                # --- search for closing '|>' ---
+                closing_idx = None
+                for j in range(i + 1, len(base)):
+                    if base[j][0] == "|>":
+                        closing_idx = j
+                        break
+
+                if closing_idx is not None:
+                    full_start = s
+                    full_end = base[closing_idx][1][1]
+                    candidate = text[full_start:full_end]
+                    # --- Accept if ---:
+                    # 1) in protected token already, OR
+                    # 2) matches generic chat special pattern <|...|>
+                    if (
+                        candidate in self.protected_tokens
+                        or re.fullmatch(r"<\|[^\s]{1,100}\|>", candidate)
+                    ):
+                        merged.append((candidate, (full_start, full_end)))
+                        i = closing_idx + 1
+                        continue
+
+            # --- default: keep token ---
+            merged.append((token, (s, e)))
+            i += 1
+        return merged

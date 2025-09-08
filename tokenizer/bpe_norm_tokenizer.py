@@ -31,6 +31,10 @@ class BPENormTokenizer(BPEAlternativeTokenizerFiltered):
         """
         if word in self._memo_all_tokenizations:
             return self._memo_all_tokenizations[word]
+        
+        if word in self.protected_tokens or (word.startswith("<|") and word.endswith("|>")):
+            self._memo_all_tokenizations[word] = [[word]]
+            return [[word]]
 
         nodes = [[] for _ in range(len(word) + 1)]
         for i in range(1, len(word) + 1):
@@ -70,6 +74,14 @@ class BPENormTokenizer(BPEAlternativeTokenizerFiltered):
         Finds the tokenization for a single word that maximizes token norm and is
         not a "random BPE" segmentation.
         """
+        # If canonical already a single protected token, keep it
+        if (
+            (len(canonical_tokenization) == 1 and canonical_tokenization[0] in self.protected_tokens)
+            or word in self.protected_tokens
+            or (word.startswith("<|") and word.endswith("|>"))
+        ):
+            return canonical_tokenization
+
         all_tokenizations = self._generate_all_word_tokenizations(word)
         
         if not all_tokenizations:
@@ -104,7 +116,17 @@ class BPENormTokenizer(BPEAlternativeTokenizerFiltered):
         
         for word, offset in pre_words:
             begin, end = offset
-            canonical_word_tokens = self.tokenizer.tokenize(text[begin:end])
+            span_text = text[begin:end]
+            canonical_word_tokens = self.tokenizer.tokenize(span_text)
+
+            # Fast path for protected/special spans
+            if (
+                (len(canonical_word_tokens) == 1 and canonical_word_tokens[0] in self.protected_tokens)
+                or span_text in self.protected_tokens
+                or (span_text.startswith("<|") and span_text.endswith("|>"))
+            ):
+                final_tokenization.extend(canonical_word_tokens)
+                continue
             
             best_word_tokens = self._find_best_word_tokenization(word, canonical_word_tokens)
             final_tokenization.extend(best_word_tokens)
