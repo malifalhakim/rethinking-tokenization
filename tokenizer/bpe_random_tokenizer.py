@@ -1,7 +1,8 @@
+import re
 import random
 import torch
 from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast
-from typing import List, Set
+from typing import List, Set, Tuple
 
 class BPEAlternativeTokenizer:
     """
@@ -26,18 +27,48 @@ class BPEAlternativeTokenizer:
         self.tokenizer = tokenizer
         self.vocab: Set[str] = set(tokenizer.get_vocab().keys())
 
-    def _get_pre_tokenized_words(self, text: str) -> List[str]:
+    def _get_pre_tokenized_words(self, text: str) -> List[Tuple[str, Tuple[int, int]]]:
         """
-        Normalizes and then pre-tokenizes the text into words.
+        Normalizes and pre-tokenizes the text into words with their original
+        character offsets, while correctly handling and preserving special tokens.
         """
-        if isinstance(self.tokenizer, PreTrainedTokenizerFast):
-            normalized_text = self.tokenizer.backend_tokenizer.normalizer.normalize_str(text)
-            return self.tokenizer.backend_tokenizer.pre_tokenizer.pre_tokenize_str(normalized_text)
-        else:
+        if not isinstance(self.tokenizer, PreTrainedTokenizerFast):
             print("WARNING: Using a non-fast tokenizer may lead to suboptimal results.")
-            raise NotImplementedError(
-                "Non-fast tokenizers are not supported."
-            )
+            raise NotImplementedError("Non-fast tokenizers are not supported.")
+
+        special_tokens = self.tokenizer.all_special_tokens
+        
+        if not special_tokens:
+            return self.tokenizer.backend_tokenizer.pre_tokenizer.pre_tokenize_str(text)
+
+        escaped_tokens = [re.escape(token) for token in special_tokens]
+        pattern = f"({ '|'.join(escaped_tokens) })"
+
+        final_tuples = []
+        last_end = 0
+
+        for match in re.finditer(pattern, text):
+            start, end = match.span()
+            if start > last_end:
+                normal_text_chunk = text[last_end:start]
+                pre_tokenized_tuples = self.tokenizer.backend_tokenizer.pre_tokenizer.pre_tokenize_str(normal_text_chunk)
+                
+                for word, (local_start, local_end) in pre_tokenized_tuples:
+                    final_tuples.append((word, (last_end + local_start, last_end + local_end)))
+
+            special_token = match.group(0)
+            final_tuples.append((special_token, (start, end)))
+            
+            last_end = end
+
+        if last_end < len(text):
+            remaining_chunk = text[last_end:]
+            pre_tokenized_tuples = self.tokenizer.backend_tokenizer.pre_tokenizer.pre_tokenize_str(remaining_chunk)
+    
+            for word, (local_start, local_end) in pre_tokenized_tuples:
+                final_tuples.append((word, (last_end + local_start, last_end + local_end)))
+
+        return final_tuples
 
     def generate_alternatives(self, text: str, n: int) -> List[List[str]]:
         """
