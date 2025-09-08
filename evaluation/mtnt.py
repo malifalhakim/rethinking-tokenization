@@ -196,7 +196,7 @@ def evaluate(args):
         predictions.append(best_prediction)
         references.append([reference_text])
 
-        print(f"\n--- Sample {i+1} ---\nSource: {source_text}\nReference: {reference_text}\nPrediction: {best_prediction}\n-----------------")
+        print(f"\n--- Sample {i+1} ---\nPrediction: {best_prediction}\nScore: {best_score}\nTokens: {variant.get('tokens_for_log', [])}")
 
     if predictions:
         results = sacrebleu.compute(predictions=predictions, references=references)
