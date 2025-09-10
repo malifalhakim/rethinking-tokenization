@@ -58,9 +58,9 @@ def initialize_random_tokenizer(tokenizer, type:str="default", calculator:TokenN
     if type == "filtered":
         return BPEAlternativeTokenizerFiltered(tokenizer)
     elif type == "norm":
-        return BPENormTokenizer(tokenizer, calculator=calculator)
+        return BPENormTokenizer(tokenizer, token_norm=calculator)
     elif type == "entropy":
-        return BPEEntropyTokenizer(tokenizer, calculator=calculator)
+        return BPEEntropyTokenizer(tokenizer, token_entropy=calculator)
     elif type == "renyi":
         return BPERenyiTokenizer(tokenizer)
     return BPEAlternativeTokenizer(tokenizer)
