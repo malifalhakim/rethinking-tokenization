@@ -1,6 +1,6 @@
 import sys
 import os
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
@@ -149,7 +149,7 @@ def main(args):
 
     if args.run_diff:
         print("\n=== Running tokenization difference analysis ===\n")
-        from tokenization_difference import main as diff_main
+        from analysis.mmlu.tokenization_difference import main as diff_main
         diff_args = argparse.Namespace(
             input_1=args.input_1,
             input_2=args.input_2,

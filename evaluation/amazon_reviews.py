@@ -51,9 +51,9 @@ def build_prompt(review_text):
 def initialize_alternative_tokenizer(tokenizer, type:str, calculator:TokenNorm|TokenEntropy=None):
     """Initializes the alternative tokenizer."""
     if type == "norm":
-        return BPENormTokenizer(tokenizer, calculator=calculator)
+        return BPENormTokenizer(tokenizer, token_norm=calculator)
     elif type == "entropy":
-        return BPEEntropyTokenizer(tokenizer, calculator=calculator)
+        return BPEEntropyTokenizer(tokenizer, token_entropy=calculator)
     elif type == "renyi":
         return BPERenyiTokenizer(tokenizer)
     return None
