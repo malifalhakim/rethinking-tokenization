@@ -16,9 +16,8 @@ from datasets import load_dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from tokenizer.bpe_random_tokenizer import BPEAlternativeTokenizer
-from tokenizer.bpe_norm_tokenizer import BPENormTokenizer
-from tokenizer.bpe_entropy_tokenizer import BPEEntropyTokenizer
-from tokenizer.bpe_renyi_tokenizer import BPERenyiTokenizer
+from tokenizer.bpe_undertrained_norm_tokenizer import BPEUndertrainedNormTokenizer
+from tokenizer.bpe_undertrained_entropy_tokenizer import BPEUndertrainedEntropyTokenizer
 
 from quantifier.trainness.magikarp import TokenNorm
 from quantifier.trainness.entropy import TokenEntropy
@@ -51,11 +50,9 @@ def build_prompt(review_text):
 def initialize_alternative_tokenizer(tokenizer, type:str, calculator:TokenNorm|TokenEntropy=None):
     """Initializes the alternative tokenizer."""
     if type == "norm":
-        return BPENormTokenizer(tokenizer, token_norm=calculator)
+        return BPEUndertrainedNormTokenizer(tokenizer, token_norm=calculator)
     elif type == "entropy":
-        return BPEEntropyTokenizer(tokenizer, token_entropy=calculator)
-    elif type == "renyi":
-        return BPERenyiTokenizer(tokenizer)
+        return BPEUndertrainedEntropyTokenizer(tokenizer, token_entropy=calculator)
     return None
 
 def get_sentiment_tokens(tokenizer):
@@ -134,9 +131,10 @@ def evaluate(args):
             calculator = TokenNorm(file_path, tokenizer)
         elif args.type == "entropy":
             file_path = args.quantifier_file
+            pkl_file = args.undertrained_entropy_file
             if not file_path:
                 raise ValueError("Quantifier file must be provided for 'entropy' tokenizer type.")
-            calculator = TokenEntropy(file_path, tokenizer)
+            calculator = TokenEntropy(file_path, tokenizer, pkl_file_path=pkl_file)
         alt_tokenizer = initialize_alternative_tokenizer(tokenizer, args.type, calculator=calculator)
 
     if args.category == "all":
@@ -240,6 +238,7 @@ if __name__ == "__main__":
     parser.add_argument("--num_tokenizations_samples", type=int, default=8, help="Number of alternative tokenizations to generate (default: 8)")
     parser.add_argument("--device", type=str, default=None, help="Device, e.g. cuda:0, cuda:1, cpu. If omitted uses device_map=auto.")
     parser.add_argument("--quantifier_file", type=str, default=None, help="Path to quantifier file for norm/entropy tokenizers.")
+    parser.add_argument("--undertrained_entropy_file", type=str, default=None, help="Path to undertrained entropy pkl file for undertrained entropy tokenizer.")
     parser.add_argument("--dataset_name", type=str, default="amazon_reviews_multi", help="Name of the dataset to use (default: amazon_reviews_multi)")
     parser.add_argument("--category", type=str, default="all", help="Category to evaluate (default: all)")
     parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility.")
