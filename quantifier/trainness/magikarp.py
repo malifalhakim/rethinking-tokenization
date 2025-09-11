@@ -20,6 +20,7 @@ class TokenNorm:
                         if token:
                             magikarp_data[token] = {
                                 'parameter': data.get('main_indicator', None),
+                                'type': data.get('magikarp', None)
                             }
                     except json.JSONDecodeError:
                         print(f"Warning: Could not decode JSON from line: {line.strip()}")
@@ -50,3 +51,22 @@ class TokenNorm:
             return 0.0
 
         return sum(norms) / num_counted
+    
+    def is_contains_undertrained_tokens(self, segment:str, threshold:str='weak_verified') -> bool:
+        """
+        Check if any token in the segment has undertrained tokens above the given threshold.
+        Thresholds: 'weak_verified', 'strong_verified'
+        """
+        if not segment:
+            return False
+        
+        segment_tokens = self.tokenizer(segment, add_special_tokens=False).tokens()
+        ids_tokenization = self.tokenizer.convert_tokens_to_ids(segment_tokens)
+        for id_token in ids_tokenization:
+            type_token = self.magikarp.get(id_token, {}).get('type', None)
+            if threshold == 'weak_verified' and type_token in ['weak_verified', 'strong_verified']:
+                return True
+            if threshold == 'strong_verified' and type_token == 'strong_verified':
+                return True
+            
+        return False
