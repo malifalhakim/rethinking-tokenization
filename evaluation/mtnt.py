@@ -226,7 +226,7 @@ if __name__ == "__main__":
     parser.add_argument("--max_new_tokens", type=int, default=256, help="Maximum number of new tokens to generate for each translation.")
     parser.add_argument("--use_alternative_tokenizer", action="store_true", help="Use your custom alternative tokenizer for generating alternatives.")
     parser.add_argument("--type", type=str, default="norm", choices=["norm", "entropy","renyi"], help="Type of alternative tokenizer to use (if applicable).")
-    parser.add_argument("--num_tokenizations_samples", type=int, default=4, help="Number of alternative tokenizations to generate")
+    parser.add_argument("--num_tokenizations_samples", type=int, default=1, help="Number of alternative tokenizations to generate")
     parser.add_argument("--device", type=str, default=None, help="Device, e.g. 'cuda:0', 'cpu'. If omitted, uses 'device_map=auto'.")
     parser.add_argument("--quantifier_file", type=str, default=None, help="Path to the quantifier file (required for 'norm' and 'entropy' types).")
     parser.add_argument("--undertrained_entropy_file", type=str, default=None, help="Path to undertrained entropy pkl file for undertrained entropy tokenizer.")

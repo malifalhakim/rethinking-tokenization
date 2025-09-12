@@ -235,7 +235,7 @@ if __name__ == "__main__":
     parser.add_argument("--num_samples", type=int, default=None, help="Number of samples to evaluate (default: all)")
     parser.add_argument("--use_alternative_tokenizer", action="store_true", help="Use random tokenizer for generating alternatives")
     parser.add_argument("--type", type=str, default="norm", choices=["norm", "entropy", "renyi"], help="Type of random tokenizer to use (default or filtered)")
-    parser.add_argument("--num_tokenizations_samples", type=int, default=8, help="Number of alternative tokenizations to generate (default: 8)")
+    parser.add_argument("--num_tokenizations_samples", type=int, default=1, help="Number of alternative tokenizations to generate (default: 8)")
     parser.add_argument("--device", type=str, default=None, help="Device, e.g. cuda:0, cuda:1, cpu. If omitted uses device_map=auto.")
     parser.add_argument("--quantifier_file", type=str, default=None, help="Path to quantifier file for norm/entropy tokenizers.")
     parser.add_argument("--undertrained_entropy_file", type=str, default=None, help="Path to undertrained entropy pkl file for undertrained entropy tokenizer.")
