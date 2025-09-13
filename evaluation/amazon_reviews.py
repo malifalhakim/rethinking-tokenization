@@ -58,7 +58,7 @@ def initialize_alternative_tokenizer(tokenizer, type:str, calculator:TokenNorm|T
 def get_sentiment_tokens(tokenizer):
     """Gets the token IDs for the sentiment classes (Positive, Neutral, Negative)."""
     sentiment_tokens = {}
-    for sentiment in ["positive", "neutral", "negative"]:
+    for sentiment in ["Positive", "Neutral", "Negative"]:
         token_id = tokenizer.encode(sentiment, add_special_tokens=False)
         if token_id and len(token_id) == 1:
             sentiment_tokens[sentiment] = token_id[0]
@@ -68,7 +68,7 @@ def get_sentiment_tokens(tokenizer):
         if token_id_space and len(token_id_space) == 1:
             sentiment_tokens[sentiment] = token_id_space[0]
 
-    if len(sentiment_tokens) != len(["positive", "neutral", "negative"]):
+    if len(sentiment_tokens) != len(["Positive", "Neutral", "Negative"]):
         print("Warning: Could not find unique single-token representations for all sentiment classes.")
 
     return sentiment_tokens
@@ -82,21 +82,26 @@ def evaluate_single_variant_by_prob(model, input_tensor, sentiment_token_ids):
     target_device = next(model.parameters()).device
     input_tensor = input_tensor.to(target_device)
 
-    with torch.no_grad():
-        outputs = model(input_tensor)
-        next_token_logits = outputs.logits[:, -1, :]
-        next_token_probs = torch.softmax(next_token_logits, dim=-1)
+    try:
+        with torch.no_grad():
+            outputs = model(input_tensor)
+            next_token_logits = outputs.logits[:, -1, :]
+            next_token_probs = torch.softmax(next_token_logits, dim=-1)
 
-    best_choice_char = None
-    max_prob = -np.inf
+        best_choice_char = None
+        max_prob = -np.inf
 
-    for sentiment, token_id in sentiment_token_ids.items():
-        prob = next_token_probs[0, token_id].item()
-        if prob > max_prob:
-            max_prob = prob
-            best_choice_char = sentiment
+        for sentiment, token_id in sentiment_token_ids.items():
+            prob = next_token_probs[0, token_id].item()
+            if prob > max_prob:
+                max_prob = prob
+                best_choice_char = sentiment
 
-    return best_choice_char, np.round(max_prob, 4)
+        return best_choice_char, np.round(max_prob, 4)
+    except torch.cuda.OutOfMemoryError:
+        print("CUDA Out of Memory during evaluation. Skipping this input.")
+        torch.cuda.empty_cache()
+        return None, None
 
 def get_input_variants(prompt_text, tokenizer, n=1):
     """Generates a list of input tensors based on the chosen tokenization strategy."""

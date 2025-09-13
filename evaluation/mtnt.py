@@ -105,17 +105,27 @@ def generate_translation(model, tokenizer, input_tensor, max_new_tokens=128):
     target_device = next(model.parameters()).device
     input_tensor = input_tensor.to(target_device)
 
-    with torch.no_grad():
-        outputs = model.generate(
-            input_tensor,
-            max_new_tokens=max_new_tokens,
-            pad_token_id=tokenizer.pad_token_id,
-            eos_token_id=tokenizer.eos_token_id,
-            do_sample=False
-        )
+    try:
+        with torch.no_grad():
+            outputs = model.generate(
+                input_tensor,
+                max_new_tokens=max_new_tokens,
+                pad_token_id=tokenizer.pad_token_id,
+                eos_token_id=tokenizer.eos_token_id,
+                do_sample=False
+            )
 
-    generated_text = tokenizer.decode(outputs[0][input_tensor.shape[1]:], skip_special_tokens=True)
-    return generated_text.strip()
+        generated_text = tokenizer.decode(outputs[0][input_tensor.shape[1]:], skip_special_tokens=True)
+        del outputs
+        del input_tensor
+        torch.cuda.empty_cache()
+    
+        return generated_text.strip()
+    except torch.cuda.OutOfMemoryError:
+        print("Warning: CUDA Out of Memory during generation. Skipping this sample.")
+        del input_tensor
+        torch.cuda.empty_cache()
+        return "[OOM Error]"
 
 def evaluate(args):
     """Main evaluation function."""

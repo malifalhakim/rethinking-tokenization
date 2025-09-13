@@ -14,10 +14,8 @@ DATASET_PATH="dataset/MTNT/test.en-fr.csv"
 
 python evaluation/amazon_reviews.py \
   --model_name "$MODEL_NAME" \
-  --device cuda:1 \
   --dataset_name "$DATASET_NAME"
 
 python evaluation/mtnt.py \
   --model_name "$MODEL_NAME" \
-  --device cuda:1 \
   --dataset_path "$DATASET_PATH"
