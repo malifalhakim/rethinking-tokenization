@@ -45,7 +45,7 @@ def setup_model_and_tokenizer(model_name, device_arg=None):
 
 def build_prompt(review_text):
     """Builds the sentiment classification prompt."""
-    return f'Classify the sentiment of the following Amazon review. Only answer with the word "Positive" or "Neutral" or "Negative".\n\nReview: "{review_text}"\n\nSentiment: '
+    return f'Classify the sentiment of the following Amazon review. Only answer with the word "positive" or "neutral" or "negative".\n\nReview: "{review_text}"\n\nSentiment: '
 
 def initialize_alternative_tokenizer(tokenizer, type:str, calculator:TokenNorm|TokenEntropy=None):
     """Initializes the alternative tokenizer."""
@@ -58,7 +58,7 @@ def initialize_alternative_tokenizer(tokenizer, type:str, calculator:TokenNorm|T
 def get_sentiment_tokens(tokenizer):
     """Gets the token IDs for the sentiment classes (Positive, Neutral, Negative)."""
     sentiment_tokens = {}
-    for sentiment in ["Positive", "Neutral", "Negative"]:
+    for sentiment in ["positive", "negative"]:  # Removed "neutral"
         token_id = tokenizer.encode(sentiment, add_special_tokens=False)
         if token_id and len(token_id) == 1:
             sentiment_tokens[sentiment] = token_id[0]
@@ -68,7 +68,7 @@ def get_sentiment_tokens(tokenizer):
         if token_id_space and len(token_id_space) == 1:
             sentiment_tokens[sentiment] = token_id_space[0]
 
-    if len(sentiment_tokens) != len(["Positive", "Neutral", "Negative"]):
+    if len(sentiment_tokens) != len(["positive", "negative"]):  # Updated expected length
         print("Warning: Could not find unique single-token representations for all sentiment classes.")
 
     return sentiment_tokens
@@ -196,6 +196,7 @@ def evaluate(args):
         print(f"Evaluating category: {category}")
         try:
             dataset = load_dataset(args.dataset_name, category, split="test")
+            dataset = dataset.filter(lambda x: x["sentiment"] != "neutral")
             if args.num_samples:
                 dataset = dataset.select(range(min(args.num_samples, len(dataset))))
         except Exception as e:
