@@ -19,6 +19,7 @@ python evaluation/mmlu.py \
   --use_alternative_tokenizer \
   --type norm \
   --device cuda:1 \
+  --num_tokenizations_samples 1 \
   --quantifier_file "$NORM_QUANTIFIER"
 
 python evaluation/mmlu.py \
@@ -26,6 +27,7 @@ python evaluation/mmlu.py \
   --use_alternative_tokenizer \
   --type entropy \
   --device cuda:1 \
+  --num_tokenizations_samples 1 \
   --quantifier_file "$ENTROPY_QUANTIFIER"
 
 python evaluation/wmt.py \

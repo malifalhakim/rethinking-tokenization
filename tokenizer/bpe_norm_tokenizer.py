@@ -32,7 +32,7 @@ class BPENormTokenizer(BPEAlternativeTokenizerFiltered):
         try:
             available = psutil.virtual_memory().available
             total_memory = psutil.virtual_memory().total
-            return available > (total_memory * 0.1)
+            return available > (total_memory * 0.5)
         except:
             return True
 
