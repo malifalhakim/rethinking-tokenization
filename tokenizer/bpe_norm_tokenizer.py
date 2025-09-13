@@ -1,5 +1,6 @@
 import sys
 import os
+import psutil
 from typing import List, Optional, Dict
 
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
@@ -16,19 +17,37 @@ class BPENormTokenizer(BPEAlternativeTokenizerFiltered):
     "random BPE" segmentations.
     """
 
-    def __init__(self, tokenizer, token_norm: TokenNorm):
+    def __init__(self, tokenizer, token_norm: TokenNorm, max_cache_size: int = 1000):
         """
         Initializes the norm-based tokenizer.
         """
         super().__init__(tokenizer)
         self.token_norm = token_norm
         self._memo_all_tokenizations: Dict[str, Optional[List[List[str]]]] = {}
+        self.max_cache_size = max_cache_size
+        self.process = psutil.Process(os.getpid())
+    
+    def _check_memory_safe(self) -> bool:
+        """Quick memory check to avoid OOM."""
+        try:
+            available = psutil.virtual_memory().available
+            total_memory = psutil.virtual_memory().total
+            return available > (total_memory * 0.1)
+        except:
+            return True
 
-    def _generate_all_word_tokenizations(self, word: str) -> Optional[List[List[str]]]:
+    def _generate_all_word_tokenizations(self, word: str, canonical_tokenization: List[str]) -> Optional[List[List[str]]]:
         """
         Generates all possible valid tokenizations for a given word by traversing
         its tokenization lattice.
         """
+        if len(word) > 30 or not self._check_memory_safe():
+            self._memo_all_tokenizations.clear()
+            return None
+
+        if len(self._memo_all_tokenizations) > self.max_cache_size:
+            self._memo_all_tokenizations.clear()
+
         if word in self._memo_all_tokenizations:
             return self._memo_all_tokenizations[word]
 
@@ -46,6 +65,9 @@ class BPENormTokenizer(BPEAlternativeTokenizerFiltered):
 
         memo_paths = {}
         def find_paths_recursive(end_pos):
+            if not self._check_memory_safe():
+                raise MemoryError("Memory limit reached during tokenization generation.")
+
             if end_pos in memo_paths:
                 return memo_paths[end_pos]
             if end_pos == 0:
@@ -56,21 +78,28 @@ class BPENormTokenizer(BPEAlternativeTokenizerFiltered):
                 token = word[start_pos:end_pos]
                 sub_paths = find_paths_recursive(start_pos)
                 for path in sub_paths:
-                    all_paths.append(path + [token])
+                    candidate_path = path + [token]
+                    if not self.is_random_bpe(candidate_path, canonical_tokenization):
+                        all_paths.append(candidate_path)
             
             memo_paths[end_pos] = all_paths
             return all_paths
 
-        result = find_paths_recursive(len(word))
-        self._memo_all_tokenizations[word] = result
-        return result
+        try:
+            result = find_paths_recursive(len(word))
+            self._memo_all_tokenizations[word] = result
+            return result
+        except MemoryError:
+            self._memo_all_tokenizations.clear()
+            self._memo_all_tokenizations[word] = None
+            return None
 
     def _find_best_word_tokenization(self, word: str, canonical_tokenization: List[str]) -> List[str]:
         """
         Finds the tokenization for a single word that maximizes token norm and is
         not a "random BPE" segmentation.
         """
-        all_tokenizations = self._generate_all_word_tokenizations(word)
+        all_tokenizations = self._generate_all_word_tokenizations(word, canonical_tokenization)
         
         if not all_tokenizations:
             return canonical_tokenization
@@ -80,9 +109,6 @@ class BPENormTokenizer(BPEAlternativeTokenizerFiltered):
 
         for tokenization in all_tokenizations:
             if tokenization == canonical_tokenization:
-                continue
-            
-            if self.is_random_bpe(tokenization, canonical_tokenization):
                 continue
             
             score = self.token_norm.get_score(tokenization)
