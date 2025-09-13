@@ -41,7 +41,7 @@ class BPEEntropyTokenizer(BPEAlternativeTokenizerFiltered):
         Generates all possible valid tokenizations for a given word by traversing
         its tokenization lattice.
         """
-        if len(word) > 30 or not self._check_memory_safe():
+        if len(word) > 25 or not self._check_memory_safe():
             self._memo_all_tokenizations.clear()
             return None
         
