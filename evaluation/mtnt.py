@@ -105,6 +105,10 @@ def generate_translation(model, tokenizer, input_tensor, max_new_tokens=128):
     target_device = next(model.parameters()).device
     input_tensor = input_tensor.to(target_device)
 
+    if input_tensor.size(1) > 2048:
+        print("Input truncated to 2048 tokens.")
+        input_tensor = input_tensor[:, :2048]
+
     try:
         with torch.no_grad():
             outputs = model.generate(

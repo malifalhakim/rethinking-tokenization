@@ -56,9 +56,9 @@ def initialize_alternative_tokenizer(tokenizer, type:str, calculator:TokenNorm|T
     return None
 
 def get_sentiment_tokens(tokenizer):
-    """Gets the token IDs for the sentiment classes (Positive, Neutral, Negative)."""
+    """Gets the token IDs for the sentiment classes (Positive, Negative, Neutral)."""
     sentiment_tokens = {}
-    for sentiment in ["positive", "negative"]:  # Removed "neutral"
+    for sentiment in ["positive", "negative", "neutral"]:
         token_id = tokenizer.encode(sentiment, add_special_tokens=False)
         if token_id and len(token_id) == 1:
             sentiment_tokens[sentiment] = token_id[0]
@@ -68,7 +68,7 @@ def get_sentiment_tokens(tokenizer):
         if token_id_space and len(token_id_space) == 1:
             sentiment_tokens[sentiment] = token_id_space[0]
 
-    if len(sentiment_tokens) != len(["positive", "negative"]):  # Updated expected length
+    if len(sentiment_tokens) != len(["positive", "negative", "neutral"]):
         print("Warning: Could not find unique single-token representations for all sentiment classes.")
 
     return sentiment_tokens
@@ -83,6 +83,10 @@ def evaluate_single_variant_by_prob(model, input_tensor, sentiment_token_ids):
     input_tensor = input_tensor.to(target_device)
 
     try:
+        if input_tensor.size(1) > 1024:
+            print("Input truncated to 1024 tokens.")
+            input_tensor = input_tensor[:, :1024]
+
         with torch.no_grad():
             outputs = model(input_tensor)
             next_token_logits = outputs.logits[:, -1, :]
@@ -195,7 +199,6 @@ def evaluate(args):
         print(f"Evaluating category: {category}")
         try:
             dataset = load_dataset(args.dataset_name, category, split="test")
-            dataset = dataset.filter(lambda x: x["sentiment"] != "neutral")
             if args.num_samples:
                 dataset = dataset.select(range(min(args.num_samples, len(dataset))))
         except Exception as e:

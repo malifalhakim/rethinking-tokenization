@@ -19,6 +19,7 @@ ENTROPY_UNDERTRAINED_FILE="results/undertrained/entropy/Qwen2.5-7B-Instruct_glit
 
 python evaluation/amazon_reviews.py \
   --model_name "$MODEL_NAME" \
+  --device cuda:1 \
   --dataset_name "$DATASET_NAME" \
   --use_alternative_tokenizer \
   --type norm \
@@ -26,6 +27,7 @@ python evaluation/amazon_reviews.py \
 
 python evaluation/amazon_reviews.py \
   --model_name "$MODEL_NAME" \
+  --device cuda:1 \
   --dataset_name "$DATASET_NAME" \
   --use_alternative_tokenizer \
   --type entropy \
@@ -34,6 +36,7 @@ python evaluation/amazon_reviews.py \
 
 python evaluation/mtnt.py \
   --model_name "$MODEL_NAME" \
+  --device cuda:1 \
   --dataset_path "$DATASET_PATH" \
   --use_alternative_tokenizer \
   --type norm \
@@ -41,6 +44,7 @@ python evaluation/mtnt.py \
 
 python evaluation/mtnt.py \
   --model_name "$MODEL_NAME" \
+  --device cuda:1 \
   --dataset_path "$DATASET_PATH" \
   --use_alternative_tokenizer \
   --type entropy \
