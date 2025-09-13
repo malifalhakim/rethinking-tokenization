@@ -86,18 +86,17 @@ def evaluate_single_variant_by_prob(model, input_tensor, sentiment_token_ids):
         with torch.no_grad():
             outputs = model(input_tensor)
             next_token_logits = outputs.logits[:, -1, :]
-            next_token_probs = torch.softmax(next_token_logits, dim=-1)
 
         best_choice_char = None
-        max_prob = -np.inf
+        max_logit = -np.inf
 
         for sentiment, token_id in sentiment_token_ids.items():
-            prob = next_token_probs[0, token_id].item()
-            if prob > max_prob:
-                max_prob = prob
+            logit = next_token_logits[0, token_id].item()
+            if logit > max_logit:
+                max_logit = logit
                 best_choice_char = sentiment
 
-        return best_choice_char, np.round(max_prob, 4)
+        return best_choice_char, np.round(max_logit, 4)
     except torch.cuda.OutOfMemoryError:
         print("CUDA Out of Memory during evaluation. Skipping this input.")
         torch.cuda.empty_cache()
