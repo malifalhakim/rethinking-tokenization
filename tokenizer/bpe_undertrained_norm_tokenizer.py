@@ -17,7 +17,7 @@ class BPEUndertrainedNormTokenizer(BPEAlternativeTokenizerFiltered):
     "random BPE" segmentations.
     """
 
-    def __init__(self, tokenizer, token_norm: TokenNorm, threshold: str = "strong_verified", max_cache_size:int=1000):
+    def __init__(self, tokenizer, token_norm: TokenNorm, threshold: str = "weak_verified", max_cache_size:int=1000):
         """
         Initializes the norm-based tokenizer.
         """
