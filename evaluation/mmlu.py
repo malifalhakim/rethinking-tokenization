@@ -20,6 +20,8 @@ from tokenizer.bpe_random_tokenizer_filtered import BPEAlternativeTokenizerFilte
 from tokenizer.bpe_norm_tokenizer import BPENormTokenizer
 from tokenizer.bpe_entropy_tokenizer import BPEEntropyTokenizer
 from tokenizer.bpe_renyi_tokenizer import BPERenyiTokenizer
+from tokenizer.bpe_undertrained_norm_tokenizer import BPEUndertrainedNormTokenizer
+from tokenizer.bpe_undertrained_entropy_tokenizer import BPEUndertrainedEntropyTokenizer
 
 from quantifier.trainness.magikarp import TokenNorm
 from quantifier.trainness.entropy import TokenEntropy
@@ -63,6 +65,10 @@ def initialize_random_tokenizer(tokenizer, type:str="default", calculator:TokenN
         return BPEEntropyTokenizer(tokenizer, token_entropy=calculator)
     elif type == "renyi":
         return BPERenyiTokenizer(tokenizer)
+    elif type == "u-norm":
+        return BPEUndertrainedNormTokenizer(tokenizer, token_norm=calculator)
+    elif type == "u-entropy":
+        return BPEUndertrainedEntropyTokenizer(tokenizer, token_entropy=calculator)
     return BPEAlternativeTokenizer(tokenizer)
 
 def get_choice_tokens(tokenizer, num_choices=4):
@@ -150,7 +156,7 @@ def evaluate(args):
 
     if args.subject == "all":
         try:
-            dataset_info = load_dataset("cais/mmlu", "all")
+            dataset_info = load_dataset(args.mmlu_name, "all")
             subjects = list(dataset_info["test"].unique("subject"))
         except Exception as e:
             print(f"Could not load 'all' subjects configuration for cais/mmlu: {e}")
@@ -167,7 +173,7 @@ def evaluate(args):
     for subject in subjects:
         print(f"Evaluating subject: {subject}")
         try:
-            dataset = load_dataset("cais/mmlu", subject, split="test")
+            dataset = load_dataset(args.mmlu_name, subject, split="test")
             if args.num_samples:
                 dataset = dataset.select(range(min(args.num_samples, len(dataset))))
         except Exception as e:
@@ -245,9 +251,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate MMLU model performance")
     parser.add_argument("--model_name", type=str, required=True, help="Name of the model to evaluate")
     parser.add_argument("--subject", type=str, default="all", help="Subject to evaluate (default: all)")
+    parser.add_argument("--mmlu_name", type=str, default="cais/mmlu", help="Hugging Face dataset name for MMLU (default: cais/mmlu)")
     parser.add_argument("--num_samples", type=int, default=None, help="Number of samples to evaluate (default: all)")
     parser.add_argument("--use_alternative_tokenizer", action="store_true", help="Use random tokenizer for generating alternatives")
-    parser.add_argument("--type", type=str, default="default", choices=["default", "filtered", "norm", "entropy", "renyi"], help="Type of random tokenizer to use (default or filtered)")
+    parser.add_argument("--type", type=str, default="default", choices=["default", "filtered", "norm", "entropy", "renyi", "u-norm", "u-entropy"], help="Type of random tokenizer to use (default or filtered)")
     parser.add_argument("--num_tokenizations_samples", type=int, default=8, help="Number of alternative tokenizations to generate (default: 8)")
     parser.add_argument("--device", type=str, default=None, help="Device, e.g. cuda:0, cuda:1, cpu. If omitted uses device_map=auto.")
     parser.add_argument("--quantifier_file", type=str, default=None, help="Path to quantifier file for norm/entropy tokenizers.")
