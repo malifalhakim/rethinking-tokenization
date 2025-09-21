@@ -142,12 +142,12 @@ def evaluate(args):
     model, tokenizer = setup_model_and_tokenizer(args.model_name, args.device)
     if args.use_alternative_tokenizer:
         calculator = None
-        if args.type == "norm":
+        if args.type == "norm" or args.type == "u-norm":
             file_path = args.quantifier_file
             if not file_path:
                 raise ValueError("Quantifier file must be provided for 'norm' tokenizer type.")
             calculator = TokenNorm(file_path, tokenizer)
-        elif args.type == "entropy":
+        elif args.type == "entropy" or args.type == "u-entropy":
             file_path = args.quantifier_file
             if not file_path:
                 raise ValueError("Quantifier file must be provided for 'entropy' tokenizer type.")
