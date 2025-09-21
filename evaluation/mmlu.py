@@ -66,7 +66,7 @@ def initialize_random_tokenizer(tokenizer, type:str="default", calculator:TokenN
     elif type == "renyi":
         return BPERenyiTokenizer(tokenizer)
     elif type == "u-norm":
-        return BPEUndertrainedNormTokenizer(tokenizer, token_norm=calculator)
+        return BPEUndertrainedNormTokenizer(tokenizer, token_norm=calculator, threshold="strong_verified")
     elif type == "u-entropy":
         return BPEUndertrainedEntropyTokenizer(tokenizer, token_entropy=calculator)
     return BPEAlternativeTokenizer(tokenizer)
