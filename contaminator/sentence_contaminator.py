@@ -116,6 +116,9 @@ class Contaminator:
         
         while True:
             base_token = random.choice(self.undertrained_tokens)
+            if not base_token.isalnum():
+                continue
+            
             noise_word = self._create_noise_word(base_token)
             
             if self._contains_undertrained_token(noise_word):

@@ -239,9 +239,10 @@ def evaluate(args):
         print(f"\nOverall Accuracy: {overall_accuracy:.4f}")
     
     safe_model_name = args.model_name.replace('/', '_')
-    output_filename = f"mmlu_evaluation_stats_{safe_model_name}.json"
+    safe_mmlu_name = args.mmlu_name.split('/')[-1]
+    output_filename = f"{safe_mmlu_name}_evaluation_stats_{safe_model_name}.json"
     if args.use_alternative_tokenizer:
-        output_filename = f"mmlu_evaluation_stats_{safe_model_name}_altok_{args.type}.json"
+        output_filename = f"{safe_mmlu_name}_evaluation_stats_{safe_model_name}_altok_{args.type}.json"
     with open(output_filename, 'w') as f:
         json.dump(stats, f, indent=4)
     print(f"Evaluation statistics saved to {output_filename}")
