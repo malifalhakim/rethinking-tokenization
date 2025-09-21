@@ -1,3 +1,4 @@
+import re
 import json
 import pickle
 import random
@@ -10,12 +11,12 @@ class Contaminator:
     A class to contaminate sentences with noise using undertrained tokens.
     """
     
-    PREFIXES = [
+    LIST_PREFIXES = [
         "un", "re", "in", "ex",
         "bi", "co", "de", "en"
     ]
 
-    SUFFIXES = [
+    LIST_SUFFIXES = [
         "ed", "er", "es", "en",
         "ly", "al", "ic", "or"
     ]
@@ -44,6 +45,12 @@ class Contaminator:
             return self._load_glitchminer_tokens(glitchminer_path)
         else:
             raise ValueError("Please provide either magikarp_path or glitchminer_path.")
+        
+    def _is_english_token(self, token: str) -> bool:
+        """Check if token contains only English letters and basic punctuation."""
+        cleaned_token = token.strip().lstrip('Ġ▁')
+        
+        return bool(re.match(r'^[a-zA-Z0-9\s\-\'\.]+$', cleaned_token)) and len(cleaned_token) > 0
 
     def _load_magikarp_tokens(self, file_path: Union[str, Path]) -> List[str]:
         """Extract undertrained tokens from Magikarp output file."""
@@ -57,7 +64,8 @@ class Contaminator:
                         data = json.loads(line.strip())
                         if data.get('magikarp') == 'strong_verified' and data.get('category') == 'OK':
                             if decoded := data.get('decoded'):
-                                tokens.append(decoded)
+                                if self._is_english_token(decoded):
+                                    tokens.append(decoded)
                     except json.JSONDecodeError:
                         print(f"Warning: Invalid JSON at line {line_num}: {line.strip()}")
         except FileNotFoundError:
@@ -80,6 +88,10 @@ class Contaminator:
             if not tokens:
                 print("Warning: No glitch_tokens found in glitchminer file")
             
+            tokens = [token for token in tokens if self._is_english_token(token)]
+            if not tokens:
+                print("Warning: No valid undertrained tokens found in glitchminer file")
+            
             return tokens
         except FileNotFoundError:
             raise FileNotFoundError(f"GlitchMiner file not found: {file_path}")
@@ -89,10 +101,10 @@ class Contaminator:
     def _create_noise_word(self, base_token: str) -> str:
         """Create a noise word by adding prefix or suffix to base token."""
         if base_token.startswith(' '):
-            suffix = random.choice(self.SUFFIXES)
+            suffix = random.choice(self.LIST_SUFFIXES)
             return base_token + suffix
         else:
-            prefix = random.choice(self.PREFIXES)
+            prefix = random.choice(self.LIST_PREFIXES)
             return prefix + base_token
         
     def _contains_undertrained_token(self, text: str) -> bool:
@@ -116,9 +128,6 @@ class Contaminator:
         
         while True:
             base_token = random.choice(self.undertrained_tokens)
-            if not base_token.isalnum():
-                continue
-            
             noise_word = self._create_noise_word(base_token)
             
             if self._contains_undertrained_token(noise_word):
