@@ -21,6 +21,8 @@ from tokenizer.bpe_random_tokenizer_filtered import BPEAlternativeTokenizerFilte
 from tokenizer.bpe_norm_tokenizer import BPENormTokenizer
 from tokenizer.bpe_entropy_tokenizer import BPEEntropyTokenizer
 from tokenizer.bpe_renyi_tokenizer import BPERenyiTokenizer
+from tokenizer.bpe_undertrained_norm_tokenizer import BPEUndertrainedNormTokenizer
+from tokenizer.bpe_undertrained_entropy_tokenizer import BPEUndertrainedEntropyTokenizer
 
 from quantifier.trainness.magikarp import TokenNorm
 from quantifier.trainness.entropy import TokenEntropy
@@ -36,7 +38,7 @@ def initialize_seed(seed: int):
         if torch.cuda.is_available():
             torch.cuda.manual_seed_all(seed)
 
-def prepare_dataset(dataset_subset: str = "fr-en", src_lang: str = "en") -> tuple:
+def prepare_dataset(wmt_name: str = "wmt14", dataset_subset: str = "fr-en", src_lang: str = "en") -> tuple:
     """
     Loads and prepares the WMT14 dataset.
     """
@@ -46,7 +48,7 @@ def prepare_dataset(dataset_subset: str = "fr-en", src_lang: str = "en") -> tupl
 
     tgt_lang = (langs - {src_lang}).pop()
 
-    dataset = load_dataset("wmt14", dataset_subset, split="test")
+    dataset = load_dataset(wmt_name, dataset_subset, split="test")
     return dataset, tgt_lang
 
 def process_dataset(dataset, src_lang: str, tgt_lang: str, num_samples: Optional[int] = None) -> pd.DataFrame:
@@ -107,6 +109,10 @@ def initialize_random_tokenizer(tokenizer, type: str = "filtered", calculator: T
         return BPEEntropyTokenizer(tokenizer, token_entropy=calculator)
     elif type == "renyi":
         return BPERenyiTokenizer(tokenizer)
+    elif type == "u-norm":
+        return BPEUndertrainedNormTokenizer(tokenizer, token_norm=calculator, threshold="strong_verified")
+    elif type == "u-entropy":
+        return BPEUndertrainedEntropyTokenizer(tokenizer, token_entropy=calculator)
     return BPEAlternativeTokenizer(tokenizer)
 
 def get_input_variants(messages, tokenizer, n=10):
@@ -165,10 +171,10 @@ def evaluate(args):
     input_tokenizer = tokenizer
     if args.use_alternative_tokenizer:
         calculator = None
-        if args.type == "norm":
+        if args.type == "norm" or args.type == "u-norm":
             file_path = args.quantifier_file
             calculator = TokenNorm(file_path, tokenizer)
-        elif args.type == "entropy":
+        elif args.type == "entropy" or args.type == "u-entropy":
             file_path = args.quantifier_file
             calculator = TokenEntropy(file_path, tokenizer)
         input_tokenizer = initialize_random_tokenizer(tokenizer, args.type, calculator=calculator)
@@ -176,7 +182,7 @@ def evaluate(args):
     dataset_subset = args.dataset_subset
     src_lang = args.src_lang
 
-    dataset, tgt_lang = prepare_dataset(dataset_subset, src_lang)
+    dataset, tgt_lang = prepare_dataset(args.wmt_name, dataset_subset, src_lang)
     dataset = process_dataset(dataset, src_lang, tgt_lang, args.num_samples)
     lang_pair = f"{src_lang}-{tgt_lang}"
 
@@ -203,6 +209,11 @@ def evaluate(args):
         best_prediction = ""
         for variant in input_variants:
             predicted_text = generate_translation(model, tokenizer, variant["tensor"], args.max_new_tokens)
+            
+            if "contaminated" in args.wmt_name:
+                predicted_text = predicted_text.split('--')[1].strip()
+                reference_text = reference_text.split('--')[1].strip()
+
             score_result = sacrebleu.compute(predictions=[predicted_text], references=[[reference_text]])
             current_score = score_result["score"]
             if current_score > best_score:
@@ -246,13 +257,14 @@ def evaluate(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate a language model on WMT translation tasks.")
     parser.add_argument("--model_name", type=str, required=True, help="Pretrained model name or path.")
+    parser.add_argument("--wmt_name", type=str, default="wmt14", help="WMT dataset name (default: wmt14).")
     parser.add_argument("--dataset_subset", type=str, default="fr-en", help="WMT dataset subset (e.g., 'fr-en').")
     parser.add_argument("--src_lang", type=str, default="en", help="Source language code (e.g., 'en').")
     parser.add_argument("--num_samples", type=int, default=None, help="Number of samples to evaluate. Default is all.")
     parser.add_argument("--device", type=str, default=None, help="Device to run the model on (e.g., 'cuda', 'cpu').")
     parser.add_argument("--max_new_tokens", type=int, default=256, help="Maximum number of new tokens to generate.")
     parser.add_argument("--use_alternative_tokenizer", action="store_true", help="Use a random tokenizer variant.")
-    parser.add_argument("--type", type=str, choices=["standard", "filtered", "norm", "entropy", "renyi"], default="filtered", help="Type of random tokenizer to use.")
+    parser.add_argument("--type", type=str, choices=["standard", "filtered", "norm", "entropy", "renyi", "u-norm", "u-entropy"], default="filtered", help="Type of random tokenizer to use.")
     parser.add_argument("--num_tokenizations_samples", type=int, default=4, help="Number of tokenization samples for random tokenizer.")
     parser.add_argument("--quantifier_file", type=str, default=None, help="Path to the quantifier file for norm/entropy tokenizers.")
     parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility.")

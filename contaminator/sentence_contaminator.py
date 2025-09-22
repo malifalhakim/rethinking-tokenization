@@ -147,4 +147,4 @@ class Contaminator:
             raise ValueError("Input sentence cannot be empty.")
 
         noise_word = self.get_noise_word()
-        return f"{noise_word}, {sentence}"
+        return f"{noise_word} -- {sentence}"

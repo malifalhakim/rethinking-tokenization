@@ -5,11 +5,12 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 import argparse
-from typing import Optional, List
+from typing import Optional, List, Union, Dict, Any
 
 from transformers import AutoTokenizer
 from datasets import Dataset, load_dataset, get_dataset_config_names
 from contaminator.sentence_contaminator import Contaminator
+import json
 
 
 class DatasetContaminator:
@@ -49,8 +50,8 @@ class DatasetContaminator:
         if subset:
             return load_dataset(dataset_name, subset, split=split)
         return load_dataset(dataset_name, split=split)
-    
-    def get_dataset_subsets(self, dataset_name: str) -> List[Optional[str]]:
+
+    def get_dataset_subsets(self, dataset_name: str, subset: Optional[str] = None) -> List[Optional[str]]:
         """
         Get list of available subsets for a dataset.
         
@@ -60,6 +61,9 @@ class DatasetContaminator:
         Returns:
             List of subset names, or [None] if no subsets exist
         """
+        if subset:
+            return [subset]
+
         try:
             subsets = get_dataset_config_names(dataset_name)
             print(f"Found subsets: {subsets}")
@@ -70,7 +74,7 @@ class DatasetContaminator:
             return [None]
     
     def contaminate_dataset(self, dataset_name: str, split: str, prompt_column: str, 
-                          subset: Optional[str] = None) -> Dataset:
+                      subset: Optional[str] = None) -> Dataset:
         """
         Create a contaminated version of the dataset.
         
@@ -86,12 +90,41 @@ class DatasetContaminator:
         print(f"Loading dataset: {dataset_name}" + (f" (subset: {subset})" if subset else ""))
         dataset = self.load_dataset_subset(dataset_name, split, subset)
         
+        def contaminate_text_recursively(data: Union[str, Dict, Any]) -> Union[str, Dict, Any]:
+            """
+            Recursively contaminate text in nested structures.
+            """
+            if isinstance(data, str):
+                try:
+                    parsed_json = json.loads(data)
+                    contaminated_structure = contaminate_text_recursively(parsed_json)
+                    return json.dumps(contaminated_structure, ensure_ascii=False)
+                except (json.JSONDecodeError, TypeError):
+                    return self.contaminator.contaminate_sentence(data)
+            
+            elif isinstance(data, dict):
+                contaminated_dict = {}
+                for key, value in data.items():
+                    contaminated_dict[key] = contaminate_text_recursively(value)
+                return contaminated_dict
+            
+            elif isinstance(data, list):
+                return [contaminate_text_recursively(item) for item in data]
+            
+            else:
+                return data
+        
         def apply_contamination(example):
             """Apply contamination to a single example."""
             try:
-                example[prompt_column] = self.contaminator.contaminate_sentence(example[prompt_column])
+                original_data = example[prompt_column]
+                contaminated_data = contaminate_text_recursively(original_data)
+                example[prompt_column] = contaminated_data
+                
             except Exception as e:
                 print(f"Warning: Failed to contaminate example: {e}")
+                print(f"Original data type: {type(example[prompt_column])}")
+                print(f"Original data sample: {str(example[prompt_column])[:200]}...")
                 
             return example
         
@@ -128,7 +161,7 @@ class DatasetContaminator:
             raise
     
     def process_dataset(self, dataset_name: str, output_name: str, split: str, 
-                       prompt_column: str) -> None:
+                       prompt_column: str, subset: Optional[str] = None) -> None:
         """
         Process entire dataset (all subsets) with contamination and push to Hub.
         
@@ -138,7 +171,7 @@ class DatasetContaminator:
             split: Dataset split to process
             prompt_column: Column containing text to contaminate
         """
-        subsets = self.get_dataset_subsets(dataset_name)
+        subsets = self.get_dataset_subsets(dataset_name, subset)
         
         for subset in subsets:
             try:
@@ -204,6 +237,12 @@ def parse_arguments() -> argparse.Namespace:
         default="text",
         help="Column name containing text prompts"
     )
+    parser.add_argument(
+        "--subset", 
+        type=str,
+        default=None,
+        help="Specific subset of the dataset to process (if applicable)"
+    )
     
     contamination_group = parser.add_mutually_exclusive_group(required=True)
     contamination_group.add_argument(
@@ -236,7 +275,8 @@ def main():
             dataset_name=args.dataset_name,
             output_name=args.output_dataset_name,
             split=args.split,
-            prompt_column=args.prompt_col
+            prompt_column=args.prompt_col,
+            subset=args.subset
         )
         
         print("\n🎉 All datasets processed successfully!")
