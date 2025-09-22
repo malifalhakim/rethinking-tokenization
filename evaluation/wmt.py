@@ -210,6 +210,7 @@ def evaluate(args):
         for variant in input_variants:
             predicted_text = generate_translation(model, tokenizer, variant["tensor"], args.max_new_tokens)
             
+            problem = False
             if "contaminated" in args.wmt_name:
                 try:
                     predicted_text = predicted_text.split(' -- ')[1]
@@ -218,7 +219,9 @@ def evaluate(args):
                     undertrained_token_source = source_text.split(' -- ')[0]
                     reference_text = reference_text.split(' -- ')[1]
                     reference_text = f"{undertrained_token_source} -- {reference_text}"
+                    problem = True
                 except:
+                    problem = True
                     pass
 
             score_result = sacrebleu.compute(predictions=[predicted_text], references=[[reference_text]])
@@ -232,7 +235,8 @@ def evaluate(args):
                 "candidate_description": variant.get("desc", "unknown"),
                 "predicted_text": predicted_text,
                 "score": current_score,
-                "tokens_used": variant.get("tokens_for_log", [])
+                "tokens_used": variant.get("tokens_for_log", []),
+                "problem": problem
             })
 
         predictions.append(best_prediction)
