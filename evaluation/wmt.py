@@ -242,9 +242,10 @@ def evaluate(args):
         print("No samples were evaluated.")
     
     safe_model_name = args.model_name.replace('/', '_')
-    output_filename = f"wmt_evaluation_stats_{safe_model_name}_{lang_pair}.json"
+    wmt_name_clean = args.wmt_name.split('/')[-1]
+    output_filename = f"{wmt_name_clean}_evaluation_stats_{safe_model_name}_{lang_pair}.json"
     if args.use_alternative_tokenizer:
-        output_filename = f"wmt_evaluation_stats_{safe_model_name}_{lang_pair}_altok_{args.type}.json"
+        output_filename = f"{wmt_name_clean}_evaluation_stats_{safe_model_name}_{lang_pair}_altok_{args.type}.json"
     with open(output_filename, 'w', encoding='utf-8') as f:
         json.dump(stats, f, indent=4, ensure_ascii=False)
     print(f"\nEvaluation statistics saved to {output_filename}")
