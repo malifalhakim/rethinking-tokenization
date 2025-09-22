@@ -2,6 +2,8 @@ import os
 import json
 import pickle
 import argparse
+import time
+import threading
 from pathlib import Path
 from datasets import load_dataset, Dataset
 from tqdm import tqdm
@@ -36,6 +38,10 @@ def parse_arguments():
                        help="Create a private repository")
     parser.add_argument("--subset", type=str, nargs='+',
                        help="Specific subset(s) to process. If not provided, processes all subsets")
+    parser.add_argument("--temp-save-hours", type=float, default=10.0,
+                       help="Hours interval for automatic temporary saves (default: 10.0)")
+    parser.add_argument("--temp-save-dir", type=str, default="./temp_results",
+                       help="Directory to save temporary results (default: ./temp_results)")
     
     return parser.parse_args()
 
@@ -106,6 +112,58 @@ def check_sample_contains_tokens(text, tokenizer, undertrained_tokens_set):
     token_set = set(tokens)
     return bool(undertrained_tokens_set & token_set)
 
+def save_temp_results(samples, temp_dir, timestamp):
+    """Save temporary results to disk."""
+    temp_dir = Path(temp_dir)
+    temp_dir.mkdir(exist_ok=True)
+    
+    filename = f"temp_results_{timestamp}.json"
+    filepath = temp_dir / filename
+    
+    with open(filepath, 'w', encoding='utf-8') as f:
+        json.dump(samples, f, ensure_ascii=False, indent=2)
+    
+    print(f"Temporary results saved to: {filepath}")
+    return filepath
+
+def load_temp_results(temp_dir):
+    """Load the most recent temporary results if available."""
+    temp_dir = Path(temp_dir)
+    if not temp_dir.exists():
+        return []
+    
+    temp_files = list(temp_dir.glob("temp_results_*.json"))
+    if not temp_files:
+        return []
+    
+    # Get the most recent file
+    latest_file = max(temp_files, key=lambda x: x.stat().st_mtime)
+    
+    try:
+        with open(latest_file, 'r', encoding='utf-8') as f:
+            samples = json.load(f)
+        print(f"Loaded {len(samples)} samples from {latest_file}")
+        return samples
+    except Exception as e:
+        print(f"Error loading temp results from {latest_file}: {e}")
+        return []
+
+def setup_auto_save_timer(samples_container, temp_dir, save_interval_hours):
+    """Setup automatic saving timer that runs in background."""
+    def auto_save():
+        while True:
+            time.sleep(save_interval_hours * 3600)  # Convert hours to seconds
+            if samples_container['samples']:
+                timestamp = int(time.time())
+                try:
+                    save_temp_results(samples_container['samples'], temp_dir, timestamp)
+                except Exception as e:
+                    print(f"Error during auto-save: {e}")
+    
+    timer_thread = threading.Thread(target=auto_save, daemon=True)
+    timer_thread.start()
+    return timer_thread
+
 def filter_samples_from_subset(dataset, tokenizer, undertrained_tokens_set, max_samples, text_column, subset_name):
     """Filter dataset samples from a specific subset that contain undertrained tokens."""
     filtered_samples = []
@@ -134,10 +192,26 @@ def filter_samples_from_subset(dataset, tokenizer, undertrained_tokens_set, max_
     return filtered_samples
 
 def filter_samples_from_all_subsets(source_dataset, subsets, tokenizer, undertrained_tokens_set, 
-                                  max_samples_total, max_samples_per_subset, text_column, split):
-    """Filter samples from all specified subsets."""
-    all_filtered_samples = []
-    total_collected = 0
+                                  max_samples_total, max_samples_per_subset, text_column, split,
+                                  temp_dir, save_interval_hours):
+    """Filter samples from all specified subsets with automatic saving."""
+    # Container to hold samples that can be accessed by auto-save thread
+    samples_container = {'samples': []}
+    
+    # Setup auto-save timer
+    auto_save_thread = setup_auto_save_timer(samples_container, temp_dir, save_interval_hours)
+    
+    # Try to load existing temp results
+    existing_samples = load_temp_results(temp_dir)
+    if existing_samples:
+        response = input(f"Found {len(existing_samples)} existing samples. Continue from where we left off? (y/n): ")
+        if response.lower() == 'y':
+            samples_container['samples'] = existing_samples
+    
+    all_filtered_samples = samples_container['samples'][:]
+    total_collected = len(all_filtered_samples)
+    
+    print(f"Starting with {total_collected} existing samples")
     
     for subset in subsets:
         if total_collected >= max_samples_total:
@@ -155,9 +229,14 @@ def filter_samples_from_all_subsets(source_dataset, subsets, tokenizer, undertra
             )
             
             all_filtered_samples.extend(subset_samples)
+            samples_container['samples'] = all_filtered_samples  # Update container for auto-save
             total_collected += len(subset_samples)
             
             print(f"Total collected so far: {total_collected}/{max_samples_total}")
+            
+            # Manual save after each subset
+            timestamp = int(time.time())
+            save_temp_results(all_filtered_samples, temp_dir, timestamp)
             
         except Exception as e:
             print(f"Error processing subset '{subset}': {e}")
@@ -204,6 +283,8 @@ def display_configuration(args, subsets):
     print(f"  Split: {args.split}")
     print(f"  Tokenizer: {args.tokenizer_name}")
     print(f"  Private: {args.private}")
+    print(f"  Auto-save interval: {args.temp_save_hours} hours")
+    print(f"  Temp save directory: {args.temp_save_dir}")
     print("-" * 50)
 
 def main():
@@ -227,11 +308,17 @@ def main():
         
         filtered_samples = filter_samples_from_all_subsets(
             args.source_dataset, subsets, tokenizer, undertrained_tokens_set,
-            args.max_samples, args.max_samples_per_subset, args.text_column, args.split
+            args.max_samples, args.max_samples_per_subset, args.text_column, args.split,
+            args.temp_save_dir, args.temp_save_hours
         )
         
         if filtered_samples:
             print(f"\nTotal samples collected: {len(filtered_samples)}")
+            
+            # Final save before pushing
+            final_timestamp = int(time.time())
+            save_temp_results(filtered_samples, args.temp_save_dir, f"final_{final_timestamp}")
+            
             push_dataset_to_hub(filtered_samples, args.output_dataset, args.private)
         else:
             print("No samples collected from any subset")
