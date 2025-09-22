@@ -24,6 +24,8 @@ def parse_arguments():
                        help="Name for the output dataset on Hugging Face Hub")
     parser.add_argument("--max-samples", type=int, default=10000,
                        help="Maximum number of samples to collect")
+    parser.add_argument("--max-samples-per-subset", type=int, default=1000,
+                       help="Maximum number of samples to collect per subset")
     parser.add_argument("--text-column", type=str, default="text",
                        help="Name of the text column in the dataset")
     parser.add_argument("--split", type=str, default="train",
@@ -32,8 +34,21 @@ def parse_arguments():
                        help="Name or path of the tokenizer to use for tokenization")
     parser.add_argument("--private", action="store_true",
                        help="Create a private repository")
+    parser.add_argument("--subset", type=str, nargs='+',
+                       help="Specific subset(s) to process. If not provided, processes all subsets")
     
     return parser.parse_args()
+
+def get_dataset_subsets(dataset_name):
+    """Get all available subsets for a given dataset."""
+    try:
+        from datasets import get_dataset_config_names
+        config_names = get_dataset_config_names(dataset_name)
+        print(f"Found {len(config_names)} subsets in dataset '{dataset_name}'")
+        return config_names
+    except Exception as e:
+        print(f"Error getting subsets for '{dataset_name}': {e}")
+        return []
 
 def load_magikarp_tokens(file_path):
     """Load undertrained tokens from magikarp JSONL output file."""
@@ -80,10 +95,10 @@ def load_tokenizer(tokenizer_name):
     print(f"Loading tokenizer: {tokenizer_name}")
     return AutoTokenizer.from_pretrained(tokenizer_name)
 
-def stream_dataset(source_dataset, split):
-    """Stream the specified dataset split for memory-efficient processing."""
-    print(f"Streaming dataset: '{source_dataset}'")
-    return load_dataset(source_dataset, split=split, streaming=True)
+def stream_dataset(source_dataset, subset, split):
+    """Stream the specified dataset subset and split for memory-efficient processing."""
+    print(f"Streaming dataset: '{source_dataset}' subset: '{subset}' split: '{split}'")
+    return load_dataset(source_dataset, subset, split=split, streaming=True)
 
 def check_sample_contains_tokens(text, tokenizer, undertrained_tokens_set):
     """Check if text contains any undertrained tokens after tokenization."""
@@ -91,13 +106,13 @@ def check_sample_contains_tokens(text, tokenizer, undertrained_tokens_set):
     token_set = set(tokens)
     return bool(undertrained_tokens_set & token_set)
 
-def filter_samples(dataset, tokenizer, undertrained_tokens_set, max_samples, text_column):
-    """Filter dataset samples that contain undertrained tokens."""
+def filter_samples_from_subset(dataset, tokenizer, undertrained_tokens_set, max_samples, text_column, subset_name):
+    """Filter dataset samples from a specific subset that contain undertrained tokens."""
     filtered_samples = []
     count = 0
     processed_count = 0
 
-    for example in tqdm(dataset, desc="Scanning samples"):
+    for example in tqdm(dataset, desc=f"Scanning {subset_name}"):
         if count >= max_samples:
             break
         
@@ -106,16 +121,49 @@ def filter_samples(dataset, tokenizer, undertrained_tokens_set, max_samples, tex
         try:
             text = example[text_column]
             if check_sample_contains_tokens(text, tokenizer, undertrained_tokens_set):
+                example['subset'] = subset_name
                 filtered_samples.append(example)
                 count += 1
                 if count % 100 == 0:
-                    print(f"Collected {count}/{max_samples} samples (processed {processed_count})")
+                    print(f"  {subset_name}: Collected {count}/{max_samples} samples (processed {processed_count})")
         except Exception as e:
-            print(f"Warning: Skipping sample due to error: {e}")
+            print(f"Warning: Skipping sample from {subset_name} due to error: {e}")
             continue
 
-    print(f"Finished filtering: {len(filtered_samples)} samples from {processed_count} processed")
+    print(f"Finished filtering {subset_name}: {len(filtered_samples)} samples from {processed_count} processed")
     return filtered_samples
+
+def filter_samples_from_all_subsets(source_dataset, subsets, tokenizer, undertrained_tokens_set, 
+                                  max_samples_total, max_samples_per_subset, text_column, split):
+    """Filter samples from all specified subsets."""
+    all_filtered_samples = []
+    total_collected = 0
+    
+    for subset in subsets:
+        if total_collected >= max_samples_total:
+            print(f"Reached total sample limit of {max_samples_total}. Stopping.")
+            break
+            
+        remaining_samples = max_samples_total - total_collected
+        samples_to_collect = min(max_samples_per_subset, remaining_samples)
+        
+        try:
+            dataset = stream_dataset(source_dataset, subset, split)
+            subset_samples = filter_samples_from_subset(
+                dataset, tokenizer, undertrained_tokens_set, 
+                samples_to_collect, text_column, subset
+            )
+            
+            all_filtered_samples.extend(subset_samples)
+            total_collected += len(subset_samples)
+            
+            print(f"Total collected so far: {total_collected}/{max_samples_total}")
+            
+        except Exception as e:
+            print(f"Error processing subset '{subset}': {e}")
+            continue
+    
+    return all_filtered_samples
 
 def create_repository(repo_id, private=False):
     """Create a Hugging Face dataset repository if it doesn't exist."""
@@ -142,14 +190,16 @@ def push_dataset_to_hub(samples, output_dataset, private=False):
     dataset.push_to_hub(output_dataset, private=private)
     print("Successfully pushed dataset to Hub")
 
-def display_configuration(args):
+def display_configuration(args, subsets):
     """Display the current configuration settings."""
     print("Configuration:")
     print(f"  Source dataset: {args.source_dataset}")
+    print(f"  Subsets to process: {len(subsets)} subsets")
     print(f"  Magikarp path: {args.magikarp_path}")
     print(f"  Glitchminer path: {args.glitchminer_path}")
     print(f"  Output dataset: {args.output_dataset}")
-    print(f"  Max samples: {args.max_samples}")
+    print(f"  Max samples total: {args.max_samples}")
+    print(f"  Max samples per subset: {args.max_samples_per_subset}")
     print(f"  Text column: {args.text_column}")
     print(f"  Split: {args.split}")
     print(f"  Tokenizer: {args.tokenizer_name}")
@@ -159,22 +209,32 @@ def display_configuration(args):
 def main():
     """Main function to orchestrate the dataset filtering process."""
     args = parse_arguments()
-    display_configuration(args)
     
     try:
+        if args.subset:
+            subsets = args.subset
+            print(f"Processing specified subsets: {subsets}")
+        else:
+            subsets = get_dataset_subsets(args.source_dataset)
+            if not subsets:
+                print("No subsets found. Trying to process dataset without subset specification.")
+                subsets = [None]
+        
+        display_configuration(args, subsets)
+        
         undertrained_tokens_set = load_undertrained_tokens(args.magikarp_path, args.glitchminer_path)
         tokenizer = load_tokenizer(args.tokenizer_name)
-        dataset = stream_dataset(args.source_dataset, args.split)
         
-        filtered_samples = filter_samples(
-            dataset, tokenizer, undertrained_tokens_set, 
-            args.max_samples, args.text_column
+        filtered_samples = filter_samples_from_all_subsets(
+            args.source_dataset, subsets, tokenizer, undertrained_tokens_set,
+            args.max_samples, args.max_samples_per_subset, args.text_column, args.split
         )
         
         if filtered_samples:
+            print(f"\nTotal samples collected: {len(filtered_samples)}")
             push_dataset_to_hub(filtered_samples, args.output_dataset, args.private)
         else:
-            print("No samples collected")
+            print("No samples collected from any subset")
             
     except Exception as e:
         print(f"Error: {e}")
