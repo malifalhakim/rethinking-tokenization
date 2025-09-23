@@ -47,9 +47,14 @@ def setup_model_and_tokenizer(model_name, device_arg=None):
         model = AutoModelForCausalLM.from_pretrained(model_name, device_map="auto")
     return model, tokenizer
 
-def build_prompt(question, choices):
+def build_prompt(question, choices, mmlu_name):
     """Builds the multiple-choice question prompt."""
-    prompt_text = f"Question: {question}\n"
+    if "contaminated" in mmlu_name:
+        undertrained_word = question.split(' -- ')[0]
+        question = question.split(' -- ')[1]
+        prompt_text = f"{undertrained_word}\n\nQuestion: {question}\n"
+    else:
+        prompt_text = f"Question: {question}\n"
     for j, choice_text in enumerate(choices):
         prompt_text += f"{chr(65+j)}. {choice_text}\n"
     prompt_text += "Answer: "
@@ -188,7 +193,7 @@ def evaluate(args):
         subject_correct = 0
 
         for i, item in enumerate(tqdm(dataset, desc=f"Subject {subject}")):
-            prompt_text = build_prompt(item["question"], item["choices"])
+            prompt_text = build_prompt(item["question"], item["choices"], args.mmlu_name)
             actual_answer_index = item["answer"]
             actual_answer_char = chr(65 + int(actual_answer_index))
 

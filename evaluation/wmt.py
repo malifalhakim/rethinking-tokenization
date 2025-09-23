@@ -79,7 +79,7 @@ def setup_model_and_tokenizer(model_name, device_arg=None):
         model = AutoModelForCausalLM.from_pretrained(model_name, device_map="auto")
     return model, tokenizer
 
-def build_translation_prompt(source_text, src_lang, tgt_lang):
+def build_translation_prompt(source_text, src_lang, tgt_lang, wmt_name):
     """Builds a prompt for the translation task."""
     map_langcode_to_name = {
         "EN": "English",
@@ -90,7 +90,12 @@ def build_translation_prompt(source_text, src_lang, tgt_lang):
         "HI": "Hindi",
     }
 
-    prompt_text = f"Translate the following text from {map_langcode_to_name.get(src_lang, src_lang)} to {map_langcode_to_name.get(tgt_lang, tgt_lang)}. Provide only the translated text.\n\n{src_lang}: {source_text}\n{tgt_lang}:"
+    if "contaminated" in wmt_name:
+        undertrained_word = source_text.split(' -- ')[0]
+        source_text = source_text.split(' -- ')[1]
+        prompt_text = f"{undertrained_word}\n\nTranslate the following text from {map_langcode_to_name.get(src_lang, src_lang)} to {map_langcode_to_name.get(tgt_lang, tgt_lang)}. Provide only the translated text.\n\n{src_lang}: {source_text}\n{tgt_lang}:"
+    else:
+        prompt_text = f"Translate the following text from {map_langcode_to_name.get(src_lang, src_lang)} to {map_langcode_to_name.get(tgt_lang, tgt_lang)}. Provide only the translated text.\n\n{src_lang}: {source_text}\n{tgt_lang}:"
     messages = [
         {"role": "user", "content": prompt_text}
     ]
@@ -202,7 +207,7 @@ def evaluate(args):
         source_text = row.original_text
         reference_text = row.translated_text
 
-        messages = build_translation_prompt(source_text, src_lang.upper(), tgt_lang.upper())
+        messages = build_translation_prompt(source_text, src_lang.upper(), tgt_lang.upper(), args.wmt_name)
         input_variants = get_input_variants(messages, input_tokenizer, args.num_tokenizations_samples)
         
         best_score = -1.0
@@ -213,14 +218,8 @@ def evaluate(args):
             problem = False
             if "contaminated" in args.wmt_name:
                 try:
-                    predicted_text = predicted_text.split(' -- ')[1]
                     reference_text = reference_text.split(' -- ')[1]
                 except IndexError:
-                    undertrained_token_source = source_text.split(' -- ')[0]
-                    reference_text = reference_text.split(' -- ')[1]
-                    reference_text = f"{undertrained_token_source} -- {reference_text}"
-                    problem = True
-                except:
                     problem = True
                     pass
 
