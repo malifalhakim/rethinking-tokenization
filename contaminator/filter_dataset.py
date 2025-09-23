@@ -136,7 +136,6 @@ def load_temp_results(temp_dir):
     if not temp_files:
         return []
     
-    # Get the most recent file
     latest_file = max(temp_files, key=lambda x: x.stat().st_mtime)
     
     try:
@@ -152,7 +151,7 @@ def setup_auto_save_timer(samples_container, temp_dir, save_interval_hours):
     """Setup automatic saving timer that runs in background."""
     def auto_save():
         while True:
-            time.sleep(save_interval_hours * 3600)  # Convert hours to seconds
+            time.sleep(save_interval_hours * 3600)
             if samples_container['samples']:
                 timestamp = int(time.time())
                 try:
@@ -195,13 +194,10 @@ def filter_samples_from_all_subsets(source_dataset, subsets, tokenizer, undertra
                                   max_samples_total, max_samples_per_subset, text_column, split,
                                   temp_dir, save_interval_hours):
     """Filter samples from all specified subsets with automatic saving."""
-    # Container to hold samples that can be accessed by auto-save thread
     samples_container = {'samples': []}
     
-    # Setup auto-save timer
     auto_save_thread = setup_auto_save_timer(samples_container, temp_dir, save_interval_hours)
     
-    # Try to load existing temp results
     existing_samples = load_temp_results(temp_dir)
     if existing_samples:
         response = input(f"Found {len(existing_samples)} existing samples. Continue from where we left off? (y/n): ")
@@ -229,12 +225,11 @@ def filter_samples_from_all_subsets(source_dataset, subsets, tokenizer, undertra
             )
             
             all_filtered_samples.extend(subset_samples)
-            samples_container['samples'] = all_filtered_samples  # Update container for auto-save
+            samples_container['samples'] = all_filtered_samples
             total_collected += len(subset_samples)
             
             print(f"Total collected so far: {total_collected}/{max_samples_total}")
             
-            # Manual save after each subset
             timestamp = int(time.time())
             save_temp_results(all_filtered_samples, temp_dir, timestamp)
             
@@ -315,7 +310,6 @@ def main():
         if filtered_samples:
             print(f"\nTotal samples collected: {len(filtered_samples)}")
             
-            # Final save before pushing
             final_timestamp = int(time.time())
             save_temp_results(filtered_samples, args.temp_save_dir, f"final_{final_timestamp}")
             
