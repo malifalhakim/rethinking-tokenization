@@ -91,8 +91,8 @@ def build_translation_prompt(source_text, src_lang, tgt_lang, wmt_name):
     }
 
     if "contaminated" in wmt_name:
-        undertrained_word = source_text.split(' -- ')[0]
-        source_text = source_text.split(' -- ')[1]
+        undertrained_word = source_text.split(' -- ', 1)[0]
+        source_text = source_text.split(' -- ', 1)[1]
         prompt_text = f"{undertrained_word}\n\nTranslate the following text from {map_langcode_to_name.get(src_lang, src_lang)} to {map_langcode_to_name.get(tgt_lang, tgt_lang)}. Provide only the translated text.\n\n{src_lang}: {source_text}\n{tgt_lang}:"
     else:
         prompt_text = f"Translate the following text from {map_langcode_to_name.get(src_lang, src_lang)} to {map_langcode_to_name.get(tgt_lang, tgt_lang)}. Provide only the translated text.\n\n{src_lang}: {source_text}\n{tgt_lang}:"
@@ -218,7 +218,7 @@ def evaluate(args):
             problem = False
             if "contaminated" in args.wmt_name:
                 try:
-                    reference_text = reference_text.split(' -- ')[1]
+                    reference_text = reference_text.split(' -- ',1)[1]
                 except IndexError:
                     problem = True
                     pass
