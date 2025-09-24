@@ -79,7 +79,7 @@ def setup_model_and_tokenizer(model_name, device_arg=None):
         model = AutoModelForCausalLM.from_pretrained(model_name, device_map="auto")
     return model, tokenizer
 
-def build_translation_prompt(source_text, src_lang, tgt_lang, wmt_name):
+def build_translation_prompt(source_text, src_lang, tgt_lang, wmt_name, contamination_type='semantic'):
     """Builds a prompt for the translation task."""
     map_langcode_to_name = {
         "EN": "English",
@@ -90,7 +90,7 @@ def build_translation_prompt(source_text, src_lang, tgt_lang, wmt_name):
         "HI": "Hindi",
     }
 
-    if "contaminated" in wmt_name:
+    if "contaminated" in wmt_name and contamination_type == "context":
         undertrained_word = source_text.split(' -- ', 1)[0]
         source_text = source_text.split(' -- ', 1)[1]
         prompt_text = f"{undertrained_word}\n\nTranslate the following text from {map_langcode_to_name.get(src_lang, src_lang)} to {map_langcode_to_name.get(tgt_lang, tgt_lang)}. Provide only the translated text.\n\n{src_lang}: {source_text}\n{tgt_lang}:"
@@ -207,7 +207,7 @@ def evaluate(args):
         source_text = row.original_text
         reference_text = row.translated_text
 
-        messages = build_translation_prompt(source_text, src_lang.upper(), tgt_lang.upper(), args.wmt_name)
+        messages = build_translation_prompt(source_text, src_lang.upper(), tgt_lang.upper(), args.wmt_name, args.contamination_type)
         input_variants = get_input_variants(messages, input_tokenizer, args.num_tokenizations_samples)
         
         best_score = -1.0
@@ -216,10 +216,33 @@ def evaluate(args):
             predicted_text = generate_translation(model, tokenizer, variant["tensor"], args.max_new_tokens)
             
             problem = False
-            if "contaminated" in args.wmt_name:
+            if "contaminated" in args.wmt_name and args.contamination_type == "context":
                 try:
                     reference_text = reference_text.split(' -- ',1)[1]
                 except IndexError:
+                    problem = True
+                    pass
+            
+            if "contaminated" in args.wmt_name and args.contamination_type == "semantic":
+                try:
+                    reference_text = reference_text.split(' -- ',1)[1]
+                    predicted_text = predicted_text.split(' -- ',1)[1]
+                except IndexError:
+                    reference_1 = reference_text.split(' -- ',1)[1]
+                    predicted_1 = predicted_text
+                    score_result_1 = sacrebleu.compute(predictions=[predicted_1], references=[[reference_1]])
+
+                    reference_2 = f"{source_text.split(' -- ',1)[0]} -- {reference_text.split(' -- ',1)[1]}"
+                    predicted_2 = predicted_text
+                    score_result_2 = sacrebleu.compute(predictions=[predicted_2], references=[[reference_2]])
+
+                    if score_result_1["score"] >= score_result_2["score"]:
+                        reference_text = reference_1
+                        predicted_text = predicted_1
+                    else:
+                        reference_text = reference_2
+                        predicted_text = predicted_2
+                except:
                     problem = True
                     pass
 
@@ -253,9 +276,9 @@ def evaluate(args):
     
     safe_model_name = args.model_name.replace('/', '_')
     wmt_name_clean = args.wmt_name.split('/')[-1]
-    output_filename = f"{wmt_name_clean}_evaluation_stats_{safe_model_name}_{lang_pair}.json"
+    output_filename = f"{args.contamination_type}_{wmt_name_clean}_evaluation_stats_{safe_model_name}_{lang_pair}.json"
     if args.use_alternative_tokenizer:
-        output_filename = f"{wmt_name_clean}_evaluation_stats_{safe_model_name}_{lang_pair}_altok_{args.type}.json"
+        output_filename = f"{args.contamination_type}_{wmt_name_clean}_evaluation_stats_{safe_model_name}_{lang_pair}_altok_{args.type}.json"
     with open(output_filename, 'w', encoding='utf-8') as f:
         json.dump(stats, f, indent=4, ensure_ascii=False)
     print(f"\nEvaluation statistics saved to {output_filename}")
@@ -269,6 +292,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate a language model on WMT translation tasks.")
     parser.add_argument("--model_name", type=str, required=True, help="Pretrained model name or path.")
     parser.add_argument("--wmt_name", type=str, default="wmt14", help="WMT dataset name (default: wmt14).")
+    parser.add_argument("--contamination_type", type=str, default="semantic", choices=["semantic", "context"], help="Type of contamination in the dataset (default: semantic)")
     parser.add_argument("--dataset_subset", type=str, default="fr-en", help="WMT dataset subset (e.g., 'fr-en').")
     parser.add_argument("--src_lang", type=str, default="en", help="Source language code (e.g., 'en').")
     parser.add_argument("--num_samples", type=int, default=None, help="Number of samples to evaluate. Default is all.")

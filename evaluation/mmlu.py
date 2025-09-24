@@ -47,9 +47,9 @@ def setup_model_and_tokenizer(model_name, device_arg=None):
         model = AutoModelForCausalLM.from_pretrained(model_name, device_map="auto")
     return model, tokenizer
 
-def build_prompt(question, choices, mmlu_name):
+def build_prompt(question, choices, mmlu_name, contamination_type='semantic'):
     """Builds the multiple-choice question prompt."""
-    if "contaminated" in mmlu_name:
+    if "contaminated" in mmlu_name and contamination_type == "context":
         undertrained_word = question.split(' -- ', 1)[0]
         question = question.split(' -- ', 1)[1]
         prompt_text = f"{undertrained_word}\n\nQuestion: {question}\n"
@@ -175,10 +175,11 @@ def evaluate(args):
     }
     total_correct, total_evaluations = 0, 0
 
+    dataset_all = load_dataset(args.mmlu_name, "all", split="test")
     for subject in subjects:
         print(f"Evaluating subject: {subject}")
         try:
-            dataset = load_dataset(args.mmlu_name, subject, split="test")
+            dataset = dataset_all.filter(lambda x: x["subject"] == subject)
             if args.num_samples:
                 dataset = dataset.select(range(min(args.num_samples, len(dataset))))
         except Exception as e:
@@ -193,7 +194,7 @@ def evaluate(args):
         subject_correct = 0
 
         for i, item in enumerate(tqdm(dataset, desc=f"Subject {subject}")):
-            prompt_text = build_prompt(item["question"], item["choices"], args.mmlu_name)
+            prompt_text = build_prompt(item["question"], item["choices"], args.mmlu_name, args.contamination_type)
             actual_answer_index = item["answer"]
             actual_answer_char = chr(65 + int(actual_answer_index))
 
@@ -245,9 +246,9 @@ def evaluate(args):
     
     safe_model_name = args.model_name.replace('/', '_')
     safe_mmlu_name = args.mmlu_name.split('/')[-1]
-    output_filename = f"{safe_mmlu_name}_evaluation_stats_{safe_model_name}.json"
+    output_filename = f"{args.contamination_type}_{safe_mmlu_name}_evaluation_stats_{safe_model_name}.json"
     if args.use_alternative_tokenizer:
-        output_filename = f"{safe_mmlu_name}_evaluation_stats_{safe_model_name}_altok_{args.type}.json"
+        output_filename = f"{args.contamination_type}_{safe_mmlu_name}_evaluation_stats_{safe_model_name}_altok_{args.type}.json"
     with open(output_filename, 'w') as f:
         json.dump(stats, f, indent=4)
     print(f"Evaluation statistics saved to {output_filename}")
@@ -258,6 +259,7 @@ if __name__ == "__main__":
     parser.add_argument("--model_name", type=str, required=True, help="Name of the model to evaluate")
     parser.add_argument("--subject", type=str, default="all", help="Subject to evaluate (default: all)")
     parser.add_argument("--mmlu_name", type=str, default="cais/mmlu", help="Hugging Face dataset name for MMLU (default: cais/mmlu)")
+    parser.add_argument("--contamination_type", type=str, default="semantic", choices=["semantic", "context"], help="Type of contamination in the dataset (default: semantic)")
     parser.add_argument("--num_samples", type=int, default=None, help="Number of samples to evaluate (default: all)")
     parser.add_argument("--use_alternative_tokenizer", action="store_true", help="Use random tokenizer for generating alternatives")
     parser.add_argument("--type", type=str, default="default", choices=["default", "filtered", "norm", "entropy", "renyi", "u-norm", "u-entropy"], help="Type of random tokenizer to use (default or filtered)")
