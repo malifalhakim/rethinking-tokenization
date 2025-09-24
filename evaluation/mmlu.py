@@ -50,8 +50,8 @@ def setup_model_and_tokenizer(model_name, device_arg=None):
 def build_prompt(question, choices, mmlu_name, contamination_type='semantic'):
     """Builds the multiple-choice question prompt."""
     if "contaminated" in mmlu_name and contamination_type == "context":
-        undertrained_word = question.split(' -- ', 1)[0]
-        question = question.split(' -- ', 1)[1]
+        undertrained_word = question.split('--', 1)[0].rstrip()
+        question = question.split('--', 1)[1].lstrip()
         prompt_text = f"{undertrained_word}\n\nQuestion: {question}\n"
     else:
         prompt_text = f"Question: {question}\n"

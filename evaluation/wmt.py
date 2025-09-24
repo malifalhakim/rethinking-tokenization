@@ -91,8 +91,8 @@ def build_translation_prompt(source_text, src_lang, tgt_lang, wmt_name, contamin
     }
 
     if "contaminated" in wmt_name and contamination_type == "context":
-        undertrained_word = source_text.split(' -- ', 1)[0]
-        source_text = source_text.split(' -- ', 1)[1]
+        undertrained_word = source_text.split('--', 1)[0].rstrip()
+        source_text = source_text.split('--', 1)[1].lstrip()
         prompt_text = f"{undertrained_word}\n\nTranslate the following text from {map_langcode_to_name.get(src_lang, src_lang)} to {map_langcode_to_name.get(tgt_lang, tgt_lang)}. Provide only the translated text.\n\n{src_lang}: {source_text}\n{tgt_lang}:"
     else:
         prompt_text = f"Translate the following text from {map_langcode_to_name.get(src_lang, src_lang)} to {map_langcode_to_name.get(tgt_lang, tgt_lang)}. Provide only the translated text.\n\n{src_lang}: {source_text}\n{tgt_lang}:"
@@ -218,22 +218,22 @@ def evaluate(args):
             problem = False
             if "contaminated" in args.wmt_name and args.contamination_type == "context":
                 try:
-                    reference_text = reference_text.split(' -- ',1)[1]
+                    reference_text = reference_text.split('--',1)[1].lstrip()
                 except IndexError:
                     problem = True
                     pass
             
             if "contaminated" in args.wmt_name and args.contamination_type == "semantic":
                 try:
-                    reference_text = reference_text.split(' -- ',1)[1]
-                    predicted_text = predicted_text.split(' -- ',1)[1]
+                    reference_text = reference_text.split('--',1)[1].lstrip()
+                    predicted_text = predicted_text.split('--',1)[1].lstrip()
                 except IndexError:
                     try:
-                        reference_1 = reference_text.split(' -- ',1)[1]
+                        reference_1 = reference_text.split('--',1)[1].lstrip()
                         predicted_1 = predicted_text
                         score_result_1 = sacrebleu.compute(predictions=[predicted_1], references=[[reference_1]])
 
-                        reference_2 = f"{source_text.split(' -- ',1)[0]} -- {reference_text.split(' -- ',1)[1]}"
+                        reference_2 = f"{source_text.split('--',1)[0].rstrip()} -- {reference_text.split('--',1)[1].lstrip()}"
                         predicted_2 = predicted_text
                         score_result_2 = sacrebleu.compute(predictions=[predicted_2], references=[[reference_2]])
 
