@@ -228,22 +228,28 @@ def evaluate(args):
                     reference_text = reference_text.split(' -- ',1)[1]
                     predicted_text = predicted_text.split(' -- ',1)[1]
                 except IndexError:
-                    reference_1 = reference_text.split(' -- ',1)[1]
-                    predicted_1 = predicted_text
-                    score_result_1 = sacrebleu.compute(predictions=[predicted_1], references=[[reference_1]])
+                    try:
+                        reference_1 = reference_text.split(' -- ',1)[1]
+                        predicted_1 = predicted_text
+                        score_result_1 = sacrebleu.compute(predictions=[predicted_1], references=[[reference_1]])
 
-                    reference_2 = f"{source_text.split(' -- ',1)[0]} -- {reference_text.split(' -- ',1)[1]}"
-                    predicted_2 = predicted_text
-                    score_result_2 = sacrebleu.compute(predictions=[predicted_2], references=[[reference_2]])
+                        reference_2 = f"{source_text.split(' -- ',1)[0]} -- {reference_text.split(' -- ',1)[1]}"
+                        predicted_2 = predicted_text
+                        score_result_2 = sacrebleu.compute(predictions=[predicted_2], references=[[reference_2]])
 
-                    if score_result_1["score"] >= score_result_2["score"]:
-                        reference_text = reference_1
-                        predicted_text = predicted_1
-                    else:
-                        reference_text = reference_2
-                        predicted_text = predicted_2
-                except:
+                        if score_result_1["score"] >= score_result_2["score"]:
+                            reference_text = reference_1
+                            predicted_text = predicted_1
+                        else:
+                            reference_text = reference_2
+                            predicted_text = predicted_2
+                    except IndexError:
+                        problem = True
+                        print(f"Warning: Could not parse contaminated format for sample {i}")
+                        pass
+                except Exception as e:
                     problem = True
+                    print(f"Warning: Error processing contaminated sample {i}: {e}")
                     pass
 
             score_result = sacrebleu.compute(predictions=[predicted_text], references=[[reference_text]])
