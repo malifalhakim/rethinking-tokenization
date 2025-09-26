@@ -15,9 +15,11 @@ def load_json_file(filepath: str) -> Dict:
 def extract_undertrained_tokens(tokens: List[str]) -> List[str]:
     """Extract tokens between 'user' and 'Translate' which represent undertrained words."""
     try:
-        user_idx = tokens.index(":")
-        translate_idx = tokens.index("Ġ--")
-        return tokens[user_idx + 1:translate_idx]
+        en_idx = tokens.index("EN")
+        filtered_tokens = tokens[en_idx + 1:]
+        user_idx = filtered_tokens.index(":")
+        translate_idx = filtered_tokens.index("Ġ--")
+        return filtered_tokens[user_idx + 1:translate_idx]
     except (ValueError, IndexError):
         return []
 

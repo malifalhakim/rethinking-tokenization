@@ -181,7 +181,8 @@ def evaluate(args):
             calculator = TokenNorm(file_path, tokenizer)
         elif args.type == "entropy" or args.type == "u-entropy":
             file_path = args.quantifier_file
-            calculator = TokenEntropy(file_path, tokenizer)
+            pkl_path = args.entropy_pkl_file
+            calculator = TokenEntropy(file_path, tokenizer, pkl_file_path=pkl_path)
         input_tokenizer = initialize_random_tokenizer(tokenizer, args.type, calculator=calculator)
 
     dataset_subset = args.dataset_subset
@@ -308,6 +309,7 @@ if __name__ == "__main__":
     parser.add_argument("--type", type=str, choices=["standard", "filtered", "norm", "entropy", "renyi", "u-norm", "u-entropy"], default="filtered", help="Type of random tokenizer to use.")
     parser.add_argument("--num_tokenizations_samples", type=int, default=4, help="Number of tokenization samples for random tokenizer.")
     parser.add_argument("--quantifier_file", type=str, default=None, help="Path to the quantifier file for norm/entropy tokenizers.")
+    parser.add_argument("--entropy_pkl_file", type=str, default=None, help="Path to entropy pkl file for entropy-based tokenizers.")
     parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility.")
 
     args = parser.parse_args()
