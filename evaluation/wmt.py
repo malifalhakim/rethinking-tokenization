@@ -246,10 +246,14 @@ def evaluate(args):
                             predicted_text = predicted_2
                     except IndexError:
                         problem = True
+                        print(f"Reference: {reference_text}")
+                        print(f"Predicted: {predicted_text}")
                         print(f"Warning: Could not parse contaminated format for sample {i}")
                         pass
                 except Exception as e:
                     problem = True
+                    print(f"Reference: {reference_text}")
+                    print(f"Predicted: {predicted_text}")
                     print(f"Warning: Error processing contaminated sample {i}: {e}")
                     pass
 
