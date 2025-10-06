@@ -36,7 +36,19 @@ class BPEAlternativeTokenizer:
             print("WARNING: Using a non-fast tokenizer may lead to suboptimal results.")
             raise NotImplementedError("Non-fast tokenizers are not supported.")
 
-        special_tokens = self.tokenizer.all_special_tokens
+        special_tokens = set()
+        
+        if self.tokenizer.all_special_tokens:
+            special_tokens.update(self.tokenizer.all_special_tokens)
+        
+        vocab = self.tokenizer.get_vocab()
+        for token in vocab.keys():
+            if (token.startswith('<') and token.endswith('>')) or \
+               (token.startswith('[') and token.endswith(']')) or \
+               (token.startswith('<|') and token.endswith('|>')):
+                special_tokens.add(token)
+        
+        special_tokens = list(special_tokens)
         
         if not special_tokens:
             return self.tokenizer.backend_tokenizer.pre_tokenizer.pre_tokenize_str(text)
@@ -64,7 +76,7 @@ class BPEAlternativeTokenizer:
         if last_end < len(text):
             remaining_chunk = text[last_end:]
             pre_tokenized_tuples = self.tokenizer.backend_tokenizer.pre_tokenizer.pre_tokenize_str(remaining_chunk)
-    
+
             for word, (local_start, local_end) in pre_tokenized_tuples:
                 final_tuples.append((word, (last_end + local_start, last_end + local_end)))
 
