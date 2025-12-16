@@ -1,3 +1,4 @@
+import re
 import json
 from typing import List
 
@@ -20,7 +21,9 @@ class TokenNorm:
                         if token:
                             magikarp_data[token] = {
                                 'parameter': data.get('main_indicator', None),
-                                'type': data.get('magikarp', None)
+                                'type': data.get('magikarp', None),
+                                'raw_vocab': data.get('raw_vocab', None),
+                                'decoded': data.get('decoded', None)
                             }
                     except json.JSONDecodeError:
                         print(f"Warning: Could not decode JSON from line: {line.strip()}")
@@ -70,3 +73,30 @@ class TokenNorm:
                 return True
             
         return False
+
+    def get_selected_undertrained_tokens(self) -> List[str]:
+        """
+        Retrieve all tokens that are not gibberish and are marked as undertrained.
+        """
+        selected_tokens = []
+        for token_id, data in self.magikarp.items():
+            decoded_token = data.get('decoded', '')
+            raw_vocab = data.get('raw_vocab', '')
+
+            token_str = decoded_token
+
+            if not token_str or token_str.strip() == '':
+                continue
+
+            if not token_str.isprintable():
+                continue
+
+            if not re.search(r'[a-zA-Z0-9]', token_str):
+                continue
+
+            if r"\ufffd" in token_str:
+                continue
+
+            selected_tokens.append(raw_vocab)
+        
+        return selected_tokens
