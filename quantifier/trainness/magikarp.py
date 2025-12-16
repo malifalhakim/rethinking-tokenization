@@ -74,15 +74,22 @@ class TokenNorm:
             
         return False
 
-    def get_selected_undertrained_tokens(self) -> List[str]:
+    def get_selected_undertrained_tokens(self, threshold: str = 'weak_verified') -> List[str]:
         """
         Retrieve all tokens that are not gibberish and are marked as undertrained.
         """
-        selected_tokens = []
+        selected_tokens = {}
         for token_id, data in self.magikarp.items():
+            type_token = data.get('type', None)
+
+            if threshold == 'weak_verified' and type_token not in ['weak_verified', 'strong_verified']:
+                continue
+            if threshold == 'strong_verified' and type_token != 'strong_verified':
+                continue
+
+            parameter = data.get('parameter', None)
             decoded_token = data.get('decoded', '')
             raw_vocab = data.get('raw_vocab', '')
-
             token_str = decoded_token
 
             if not token_str or token_str.strip() == '':
@@ -97,6 +104,11 @@ class TokenNorm:
             if r"\ufffd" in token_str:
                 continue
 
-            selected_tokens.append(raw_vocab)
+            selected_tokens[token_id] = {
+                'raw_vocab': raw_vocab,
+                'decoded': decoded_token,
+                'parameter': parameter,
+                'type': type_token
+            }
         
         return selected_tokens
