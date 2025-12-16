@@ -1,138 +1,87 @@
+import math
+import heapq
 import sys
 import os
-import psutil
-from typing import List, Optional, Dict
+from typing import List, Tuple
 
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from tokenizer.bpe_random_tokenizer_filtered import BPEAlternativeTokenizerFiltered
+from tokenizer.bpe_random_tokenizer import BPEAlternativeTokenizer
 from quantifier.trainness.magikarp import TokenNorm
 
-class BPENormTokenizer(BPEAlternativeTokenizerFiltered):
+class BPENormTokenizer(BPEAlternativeTokenizer):
     """
     A wrapper for BPE-based tokenizers that generates a single tokenization 
-    that aims to maximize the average token norm, while also filtering out
-    "random BPE" segmentations.
+    that aims to maximize the average token norm
     """
 
-    def __init__(self, tokenizer, token_norm: TokenNorm, max_cache_size: int = 1000):
+    def __init__(self, tokenizer, token_norm: TokenNorm):
         """
         Initializes the norm-based tokenizer.
         """
         super().__init__(tokenizer)
         self.token_norm = token_norm
-        self._memo_all_tokenizations: Dict[str, Optional[List[List[str]]]] = {}
-        self.max_cache_size = max_cache_size
-        self.process = psutil.Process(os.getpid())
     
-    def _check_memory_safe(self) -> bool:
-        """Quick memory check to avoid OOM."""
-        try:
-            available = psutil.virtual_memory().available
-            total_memory = psutil.virtual_memory().total
-            return available > (total_memory * 0.5)
-        except:
-            return True
-
-    def _generate_all_word_tokenizations(self, word: str, canonical_tokenization: List[str]) -> Optional[List[List[str]]]:
+    def _scoring_function(self, item: Tuple[float, int, List[str]], length_penalty: float = 0.02) -> float:
         """
-        Generates all possible valid tokenizations for a given word by traversing
-        its tokenization lattice.
+        Scoring function to evaluate tokenizations based on average token norm.
         """
-        if len(word) > 25 or not self._check_memory_safe():
-            self._memo_all_tokenizations.clear()
-            return None
+        total_score, token_count, _ = item
+        if token_count == 0:
+            return -math.inf
+        
+        average_score = total_score / token_count
+        penalty_term = length_penalty * (token_count - 1)
+        return average_score - penalty_term
 
-        if len(self._memo_all_tokenizations) > self.max_cache_size:
-            self._memo_all_tokenizations.clear()
+    def _find_best_word_tokenization(self, word: str, k: int = 5) -> List[str]:
+        """
+        Finds the optimal tokenization for a word based on token norm scores.
+        """
+        n = len(word)
+        # Tuple format: (total_score, token_count, tokenization)
+        dp: List[List[Tuple[float, int, List[str]]]] = [[] for _ in range(n + 1)]
 
-        if word in self._memo_all_tokenizations:
-            return self._memo_all_tokenizations[word]
+        dp[0] = [(0.0, 0, [])]  # Base case: empty string
 
-        nodes = [[] for _ in range(len(word) + 1)]
-        for i in range(1, len(word) + 1):
+        for i in range(1, n + 1):
+            candidates = []
             for j in range(i):
                 substring = word[j:i]
                 if substring in self.vocab:
-                    if j == 0 or nodes[j]:
-                        nodes[i].append(j)
+                    token_score = self.token_norm.get_score([substring])
 
-        if not nodes[len(word)]:
-            self._memo_all_tokenizations[word] = None
-            return None
-
-        memo_paths = {}
-        def find_paths_recursive(end_pos):
-            if not self._check_memory_safe():
-                raise MemoryError("Memory limit reached during tokenization generation.")
-
-            if end_pos in memo_paths:
-                return memo_paths[end_pos]
-            if end_pos == 0:
-                return [[]]
-
-            all_paths = []
-            for start_pos in nodes[end_pos]:
-                token = word[start_pos:end_pos]
-                sub_paths = find_paths_recursive(start_pos)
-                for path in sub_paths:
-                    candidate_path = path + [token]
-                    if not self.is_random_bpe(candidate_path, canonical_tokenization):
-                        all_paths.append(candidate_path)
+                    if dp[j]:
+                        for prev_total, prev_count, prev_tokens in dp[j]:
+                            new_total = prev_total + token_score
+                            new_count = prev_count + 1
+                            new_tokens = prev_tokens + [substring]
+                            candidates.append((new_total, new_count, new_tokens))
             
-            memo_paths[end_pos] = all_paths
-            return all_paths
-
-        try:
-            result = find_paths_recursive(len(word))
-            self._memo_all_tokenizations[word] = result
-            return result
-        except MemoryError:
-            self._memo_all_tokenizations.clear()
-            self._memo_all_tokenizations[word] = None
-            return None
-
-    def _find_best_word_tokenization(self, word: str, canonical_tokenization: List[str]) -> List[str]:
-        """
-        Finds the tokenization for a single word that maximizes token norm and is
-        not a "random BPE" segmentation.
-        """
-        all_tokenizations = self._generate_all_word_tokenizations(word, canonical_tokenization)
-        
-        if not all_tokenizations:
-            return canonical_tokenization
-
-        best_tokenization = canonical_tokenization
-        max_score = self.token_norm.get_score(canonical_tokenization)
-
-        for tokenization in all_tokenizations:
-            if tokenization == canonical_tokenization:
+            if not candidates:
                 continue
-            
-            score = self.token_norm.get_score(tokenization)
-            if score > max_score:
-                max_score = score
-                best_tokenization = tokenization
+
+            # Keep top K candidates for this position 
+            dp[i] = heapq.nlargest(k, candidates, key=lambda x: self._scoring_function(x))
         
-        return best_tokenization
+        if dp[n]:
+            best_candidate = max(dp[n], key=lambda x: self._scoring_function(x))
+            return best_candidate[2]
+        
+        return self.tokenizer.tokenize(word)
 
     def generate_best_tokenization(self, text: str) -> List[str]:
         """
         Generates a single tokenization for the entire text that aims to
         maximize the overall average token norm by optimizing word by word.
         """
-        self._memo_all_tokenizations.clear()
-        
         pre_words = self._get_pre_tokenized_words(text)
         final_tokenization = []
         
         for word, offset in pre_words:
-            begin, end = offset
-            canonical_word_tokens = self.tokenizer.tokenize(text[begin:end])
-            
-            best_word_tokens = self._find_best_word_tokenization(word, canonical_word_tokens)
+            best_word_tokens = self._find_best_word_tokenization(word)
             final_tokenization.extend(best_word_tokens)
             
         return final_tokenization
