@@ -155,8 +155,7 @@ class GeminiDetector:
         """Process entire dataset with progress tracking and incremental saving."""
         results = []
         
-        for idx, entry in enumerate(tqdm(dataset, desc="Processing problems")):
-            problem_text = entry['question']
+        for idx, problem_text in enumerate(tqdm(dataset, desc="Processing problems")):
             detection = self.detect(problem_text)
             
             result = {
