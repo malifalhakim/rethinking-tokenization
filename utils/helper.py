@@ -73,7 +73,11 @@ def generate_response_with_params(model, tokenized_prompts, tokenizer, use_vllm:
             seed=seed,
             **generation_params
         )
-        outputs = model.generate(tokenized_prompts, sampling_params)
+        if isinstance(tokenized_prompts[0], str):
+            outputs = model.generate(tokenized_prompts, sampling_params)
+        else:
+            outputs = model.generate(prompt_token_ids=tokenized_prompts, sampling_params=sampling_params)
+        
         responses = [output.outputs[0].text for output in outputs]
     else:
         input_ids = tokenized_prompts["input_ids"].to(model.device)
@@ -225,3 +229,29 @@ def find_optimal_batch_size(model, tokenizer, sample_prompts: list[str], use_vll
                 gc.collect()
             else:
                 raise
+
+def find_sequence_index(full_list: list, sub_list: list) -> int:
+    """
+    Finds the starting index of sub_list in full_list.
+    Returns -1 if sub_list is not found.
+    """
+    sub_len = len(sub_list)
+    for i in range(len(full_list) - sub_len + 1):
+        if full_list[i:i + sub_len] == sub_list:
+            return i
+    return -1
+
+def inject_token_at_placeholder(input_ids: list, placeholder_ids: list, token_ids: list) -> list:
+    """
+    Replaces the placeholder_ids in input_ids with token_ids.
+    """
+    index = find_sequence_index(input_ids, placeholder_ids)
+    if index == -1:
+        raise ValueError("Placeholder IDs not found in input IDs.")
+    
+    new_input_ids = (
+        input_ids[:index] + 
+        token_ids + 
+        input_ids[index + len(placeholder_ids):]
+    )
+    return new_input_ids
