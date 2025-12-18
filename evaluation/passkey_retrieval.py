@@ -110,6 +110,12 @@ def save_results(dataset: Dataset, output_path: str) -> None:
     print(f"Detailed results saved to {output_path}")
 
 
+def save_stats(stats: EvaluationStats, output_path: str) -> None:
+    with open(output_path, 'w', encoding='utf-8') as f:
+        json.dump(asdict(stats), f, indent=2)
+    print(f"Stats saved to {output_path}")
+
+
 def build_prompts(tokenizer, use_vllm: bool) -> dict[str, Any]:
     processed = process_prompt(tokenizer, list(PROMPT_TEMPLATES.values()), use_vllm)
     return {key: processed[i] for i, key in enumerate(PROMPT_TEMPLATES.keys())}
@@ -141,6 +147,9 @@ def main(args: argparse.Namespace) -> None:
 
     if args.output_path:
         save_results(dataset, args.output_path)
+    
+    if args.stats_path:
+        save_stats(stats, args.stats_path)
 
 
 if __name__ == "__main__":
@@ -155,5 +164,6 @@ if __name__ == "__main__":
     parser.add_argument('--top_p', type=float, default=1.0, help='Nucleus sampling probability')
     parser.add_argument('--seed', type=int, default=42, help='Random seed for reproducibility')
     parser.add_argument('--output_path', type=str, default=None, help='Path to save detailed results')
+    parser.add_argument('--stats_path', type=str, default=None, help='Path to save stats JSON file')
     args = parser.parse_args()
     main(args)
