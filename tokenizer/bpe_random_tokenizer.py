@@ -2,7 +2,7 @@ import re
 import random
 import torch
 from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast
-from typing import List, Set, Tuple
+from typing import List, Set, Tuple, Union, Optional, Dict, Any
 
 class BPEAlternativeTokenizer:
     """
@@ -25,7 +25,102 @@ class BPEAlternativeTokenizer:
                 "'fast' tokenizer."
             )
         self.tokenizer = tokenizer
+        self.pad_token_id = tokenizer.pad_token_id
+        self.eos_token = tokenizer.eos_token
         self.vocab: Set[str] = set(tokenizer.get_vocab().keys())
+        self.padding_side = tokenizer.padding_side
+
+    def __call__(
+        self,
+        text: Union[str, List[str]],
+        n: int = 1,
+        add_special_tokens: bool = True,
+        padding: Union[bool, str] = False,
+        return_tensors: Optional[str] = 'pt',
+    ) -> Dict[str, Any]:
+        """
+        Tokenizes the input text(s), generating N alternative tokenizations.
+
+        Args:
+            text: A single string or a list of strings to tokenize.
+            n: Number of alternative tokenizations to generate per input.
+            add_special_tokens: Whether to add special tokens.
+            padding: Whether to pad the sequences. Can be True, False, or 'longest'.
+            return_tensors: The type of tensors to return ('pt' for PyTorch).
+        """
+        if isinstance(text, str):
+            texts = [text]
+        else:
+            texts = text
+
+        batch_input_ids = []
+        for t in texts:
+            input_ids = self.encode(t, n=n, return_tensors=return_tensors,add_special_tokens=add_special_tokens)
+            batch_input_ids.append(input_ids)
+        
+        flat_input_ids = []
+        for ids_list in batch_input_ids:
+            flat_input_ids.extend(ids_list)
+        
+        if padding:
+            max_length = max(ids.shape[1] for ids in batch_input_ids)
+            padded_input_ids = []
+            attention_masks = []
+
+            for ids in flat_input_ids:
+                seq_length = ids.shape[1]
+                pad_length = max_length - seq_length
+
+                if pad_length > 0:
+                    pad_id = self.tokenizer.pad_token_id
+                    padding_tensor = torch.full((ids.shape[0], pad_length), pad_id, dtype=ids.dtype)
+
+                    if self.padding_side == "left":
+                        ids = torch.cat([padding_tensor, ids], dim=1)
+                        attention_mask = torch.cat([
+                            torch.zeros(ids.shape[0], pad_length, dtype=torch.long),
+                            torch.ones(ids.shape[0], seq_length, dtype=torch.long)
+                        ], dim=1)
+                    else:
+                        ids = torch.cat([ids, padding_tensor], dim=1)
+                        attention_mask = torch.cat([
+                            torch.ones(ids.shape[0], seq_length, dtype=torch.long),
+                            torch.zeros(ids.shape[0], pad_length, dtype=torch.long)
+                        ], dim=1)
+                else:
+                    attention_mask = torch.ones(ids.shape[0], seq_length, dtype=torch.long)
+                
+                attention_masks.append(attention_mask)
+                padded_input_ids.append(ids)
+
+            return {
+                "input_ids": torch.cat(padded_input_ids, dim=0),
+                "attention_mask": torch.cat(attention_masks, dim=0)
+            }
+        
+        return {
+            "input_ids": torch.cat(batch_input_ids, dim=0)
+        }
+    
+    def apply_chat_template(self, chat: List[Dict[str, str]], tokenize: bool = True, add_generation_prompt: bool = False) -> Union[str, Dict[str, Any]]:
+        """
+        Applies a chat template to the conversation.
+
+        Args:
+            chat: A list of dictionaries representing the chat messages.
+            tokenize: Whether to tokenize the formatted chat.
+            add_generation_prompt: Whether to add a generation prompt at the end.
+        """
+        formatted = self.tokenizer.apply_chat_template(
+            chat, 
+            tokenize=False, 
+            add_generation_prompt=add_generation_prompt
+        )
+
+        if tokenize:
+            return self(text=formatted)
+        else:
+            return formatted
 
     def _get_pre_tokenized_words(self, text: str) -> List[Tuple[str, Tuple[int, int]]]:
         """
@@ -131,7 +226,7 @@ class BPEAlternativeTokenizer:
 
         return alternatives
 
-    def encode(self, text:str, n:int=10, return_tensors:str='pt', add_special_tokens:bool=True):
+    def encode(self, text:str, n:int=1, return_tensors:str='pt', add_special_tokens:bool=True):
         """
         Encodes the text into token IDs, generating N alternative tokenizations.
         """
@@ -147,3 +242,17 @@ class BPEAlternativeTokenizer:
             encoded_tensors.append(ids)
 
         return encoded_tensors
+    
+    def convert_ids_to_tokens(self, ids) -> List[str]:
+        """
+        Converts a list of token IDs back to tokens.
+        """
+        return self.tokenizer.convert_ids_to_tokens(ids)
+
+    def decode(self, token_ids: Union[List[int], torch.Tensor], skip_special_tokens: bool = True) -> str:
+        """
+        Decodes a list of token IDs back to a string.
+        """
+        if isinstance(token_ids, torch.Tensor):
+            token_ids = token_ids.tolist()
+        return self.tokenizer.decode(token_ids, skip_special_tokens=skip_special_tokens)
