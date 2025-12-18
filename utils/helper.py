@@ -59,7 +59,7 @@ def process_prompt(tokenizer, prompts: list[str], use_vllm: bool):
     templated_prompts = [tokenizer.apply_chat_template(chat, tokenize=False, add_generation_prompt=True) for chat in chats]
 
     tokenizer.padding_side = "left"
-    tokenized_inputs = tokenizer(templated_prompts, return_tensors="pt", padding=True)
+    tokenized_inputs = tokenizer(templated_prompts, return_tensors="pt", padding=True, add_special_tokens=False)
     return tokenized_inputs
 
 def generate_response_with_params(model, tokenized_prompts, tokenizer, use_vllm: bool, max_new_tokens: int = 512, seed: int = 42, **generation_params):

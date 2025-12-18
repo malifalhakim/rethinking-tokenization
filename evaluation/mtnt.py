@@ -57,15 +57,12 @@ def apply_translation_prompt(source_text: str, target_language: str) -> str:
 def get_tokenized_strings(tokenizer, tokenized_prompts, use_vllm: bool) -> list[list[str]]:
     """Convert tokenized prompts to list of token strings."""
     if use_vllm:
-        # For vLLM, tokenized_prompts is a list of strings
         tokenized_strings = []
-        for prompt in tokenized_prompts:
-            token_ids = tokenizer.encode(prompt)
+        for token_ids in tokenized_prompts:
             tokens = tokenizer.convert_ids_to_tokens(token_ids)
             tokenized_strings.append(tokens)
         return tokenized_strings
     else:
-        # For HF, tokenized_prompts is a dict with input_ids
         tokenized_strings = []
         for i in range(tokenized_prompts["input_ids"].shape[0]):
             tokens = tokenizer.convert_ids_to_tokens(
@@ -93,6 +90,8 @@ def evaluate_batch(
     ]
     
     tokenized_prompts = process_prompt(tokenizer, prompts, use_vllm)
+    if args.use_vllm:
+        tokenized_prompts = [tokenizer.encode(prompt, add_special_tokens=False) for prompt in prompts]
     
     tokenized_strings = None
     if collect_tokenized:
