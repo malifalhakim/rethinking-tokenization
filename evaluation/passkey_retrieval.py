@@ -16,11 +16,11 @@ from tokenizer.bpe_norm_tokenizer import BPENormTokenizer
 from quantifier.trainness.magikarp import TokenNorm
 
 PROMPT_TEMPLATES = {
-    "direct": "The secret password for the database is 'TOKEN'. What is the password?",
-    "narrative": "I was walking down the street and saw a sign that said 'TOKEN' in big neon letters. What did the sign say?",
-    "technical": "Extract the value of 'id' from this object: {{'id': 'TOKEN', 'status': 'active'}}. Return only the value.",
-    "long_context": "Please listen carefully. The weather is nice. The sky is blue. The target code is 'TOKEN'. The grass is green. What is the target code?",
-    "formatting": "The system generated a unique identifier: 'TOKEN'. Please output this identifier and nothing else."
+    "direct": "The secret password for the database is 'TOKEN'. Extract the password and spell it by placing a hyphen between every letter.\nOutput ONLY the hyphenated string. Do not provide any introductory text, labels, or explanations.",
+    "narrative": "I was walking down the street and saw a sign that said 'TOKEN' in big neon letters.\nExtract the word written on the sign and spell the word with a hyphen between every letter. Constraint: Output ONLY the final hyphenated string. No other words.",
+    "technical": "Extract the value of 'id' from this object: {{'id': 'TOKEN', 'status': 'active'}}. Extract the value of 'id' and spell it by placing a hyphen between every letter.\nOutput ONLY the hyphenated string. Do not provide any introductory text, labels, or explanations.",
+    "long_context": "Please listen carefully. The weather is nice. The sky is blue. The target code is 'TOKEN'. The grass is green. Extract the target code and spell it by placing a hyphen between every letter.\nOutput ONLY the hyphenated string. Do not provide any introductory text, labels, or explanations.",
+    "formatting": "The system generated a unique identifier: 'TOKEN'. Extract the identifier code and spell it by placing a hyphen between every letter.\nOutput ONLY the hyphenated string. Do not provide any introductory text, labels, or explanations."
 }
 
 PLACEHOLDER_TEXT = 'TOKEN'

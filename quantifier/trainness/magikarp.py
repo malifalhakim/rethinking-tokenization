@@ -92,16 +92,25 @@ class TokenNorm:
             raw_vocab = data.get('raw_vocab', '')
             token_str = decoded_token
 
+            if not isinstance(token_str, str):
+                continue
+
             if not token_str or token_str.strip() == '':
                 continue
 
             if not token_str.isprintable():
                 continue
 
-            if not re.search(r'[a-zA-Z0-9]', token_str):
+            if not re.search(r'[a-zA-Z]', token_str):
+                continue
+
+            if len(token_str.strip()) < 4:
                 continue
 
             if r"\ufffd" in token_str:
+                continue
+
+            if re.search(r'[\{\}\[\]\(\)]', token_str):
                 continue
 
             selected_tokens[token_id] = {
@@ -111,4 +120,10 @@ class TokenNorm:
                 'type': type_token
             }
         
-        return selected_tokens
+        sorted_tokens = dict(sorted(
+            selected_tokens.items(),
+            key=lambda x: len(x[1].get('decoded', '')),
+            reverse=True
+        ))
+        
+        return sorted_tokens
