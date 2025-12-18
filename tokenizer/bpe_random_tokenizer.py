@@ -226,7 +226,7 @@ class BPEAlternativeTokenizer:
 
         return alternatives
 
-    def encode(self, text:str, n:int=1, return_tensors:str='pt', add_special_tokens:bool=True):
+    def encode(self, text:str, return_tensors:str, n:int=1, add_special_tokens:bool=True):
         """
         Encodes the text into token IDs, generating N alternative tokenizations.
         """
