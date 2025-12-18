@@ -176,7 +176,6 @@ def main(args):
     # -- Prepare model and tokenizer --
     print(f"Loading model: {args.model_name}")
     model, tokenizer = prepare_model(args.model_name, use_vllm=False)
-    model = model.to(args.device)
 
     # -- Get option token IDs --
     option_tokens = get_option_token_ids(tokenizer)
@@ -269,7 +268,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--tokenizer_type", 
         type=str, 
-        choices=["norm"], 
+        choices=["norm", "standard"], 
         default=None, 
         help="Type of tokenizer to use"
     )
@@ -284,12 +283,6 @@ if __name__ == "__main__":
         type=str, 
         default=None, 
         help="Path to Magikarp JSONL file for token normalization"
-    )
-    parser.add_argument(
-        "--device", 
-        type=str, 
-        default="cuda" if torch.cuda.is_available() else "cpu", 
-        help="Device to run the model on, e.g., cuda:0"
     )
     parser.add_argument(
         "--output_path",
