@@ -33,13 +33,14 @@ class EvaluationEntry:
     target_token: str
     prompt_type: str
     response: str = ""
-    correctness: bool = False
+    error_char_rate: float = 0.0
 
 
 @dataclass
 class EvaluationStats:
-    accuracy: float
-    correct_count: int
+    mean_error_char_rate: float
+    total_errors: int
+    total_chars: int
     total_count: int
 
 
@@ -82,25 +83,79 @@ def prepare_dataset(token_norm: TokenNorm, prompts: dict[str, Any],
     return dataset
 
 
-def is_match(response: str, target_token: str) -> bool:
+def parse_hyphenated(text: str) -> str:
+    """Parse hyphenated string back to original (e.g., 'h-e-l-l-o' -> 'hello')."""
+    text = text.strip()
+    if '-' in text:
+        return ''.join(text.split('-'))
+    return text
+
+
+def levenshtein_distance(s1: str, s2: str) -> int:
+    """Calculate the Levenshtein distance between two strings."""
+    if len(s1) < len(s2):
+        return levenshtein_distance(s2, s1)
+
+    if len(s2) == 0:
+        return len(s1)
+
+    previous_row = range(len(s2) + 1)
+    for i, c1 in enumerate(s1):
+        current_row = [i + 1]
+        for j, c2 in enumerate(s2):
+            insertions = previous_row[j + 1] + 1
+            deletions = current_row[j] + 1
+            substitutions = previous_row[j] + (c1 != c2)
+            current_row.append(min(insertions, deletions, substitutions))
+        previous_row = current_row
+
+    return previous_row[-1]
+
+
+def calculate_error_char_rate(response: str, target_token: str) -> tuple[float, int, int]:
+    """
+    Calculate Error Character Rate (ECR) between response and target.
+    
+    Parses the hyphenated response and compares against the target token.
+    
+    Returns:
+        tuple: (error_char_rate, num_errors, max_length)
+    """
     target_token = target_token.strip()
-    pattern = re.escape(target_token)
-    return bool(re.search(pattern, response))
+    parsed_response = parse_hyphenated(response)
+    
+    edit_distance = levenshtein_distance(parsed_response, target_token)
+    max_length = max(len(parsed_response), len(target_token))
+    
+    if max_length == 0:
+        return 0.0, 0, 0
+    
+    error_rate = edit_distance / max_length
+    return error_rate, edit_distance, max_length
 
 
 def evaluate_responses(dataset: Dataset, responses: list[str]) -> EvaluationStats:
-    correct_count = 0
+    total_errors = 0
+    total_chars = 0
+    sum_error_rates = 0.0
 
     for entry, response in zip(dataset.entries, responses):
         entry.response = response
-        entry.correctness = is_match(response, entry.target_token)
-        if entry.correctness:
-            correct_count += 1
+        error_rate, errors, max_len = calculate_error_char_rate(response, entry.target_token)
+        entry.error_char_rate = error_rate
+        total_errors += errors
+        total_chars += max_len
+        sum_error_rates += error_rate
 
     total_count = len(dataset)
-    accuracy = correct_count / total_count if total_count > 0 else 0.0
+    mean_ecr = sum_error_rates / total_count if total_count > 0 else 0.0
 
-    return EvaluationStats(accuracy=accuracy, correct_count=correct_count, total_count=total_count)
+    return EvaluationStats(
+        mean_error_char_rate=mean_ecr,
+        total_errors=total_errors,
+        total_chars=total_chars,
+        total_count=total_count
+    )
 
 
 def save_results(dataset: Dataset, output_path: str) -> None:
@@ -143,7 +198,9 @@ def main(args: argparse.Namespace) -> None:
     stats = evaluate_responses(dataset, responses)
 
     print("Evaluation Results:")
-    print(f"Accuracy: {stats.accuracy * 100:.2f}% ({stats.correct_count}/{stats.total_count})")
+    print(f"Mean Error Character Rate: {stats.mean_error_char_rate * 100:.2f}%")
+    print(f"Total Errors: {stats.total_errors} / {stats.total_chars} characters")
+    print(f"Total Samples: {stats.total_count}")
 
     if args.output_path:
         save_results(dataset, args.output_path)
