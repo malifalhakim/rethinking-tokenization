@@ -66,7 +66,7 @@ class Dataset:
 def prepare_dataset(token_norm: TokenNorm, prompts: dict[str, Any], 
                     tokenizer, number_of_data: int = 500) -> Dataset:
     placeholder_ids = tokenizer.encode(PLACEHOLDER_TEXT, add_special_tokens=False)
-    undertrained_tokens = token_norm.get_selected_undertrained_tokens()
+    undertrained_tokens = token_norm.get_selected_undertrained_tokens(threshold='strong_verified')
     undertrained_tokens = dict(itertools.islice(undertrained_tokens.items(), number_of_data))
 
     dataset = Dataset()

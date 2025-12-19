@@ -55,7 +55,7 @@ class TokenNorm:
 
         return sum(norms) / num_counted
     
-    def is_contains_undertrained_tokens(self, segment:str, threshold:str='weak_verified') -> bool:
+    def is_contains_undertrained_tokens(self, segment:str, threshold:str='strong_verified') -> bool:
         """
         Check if any token in the segment has undertrained tokens above the given threshold.
         Thresholds: 'weak_verified', 'strong_verified'
@@ -74,7 +74,7 @@ class TokenNorm:
             
         return False
 
-    def get_selected_undertrained_tokens(self, threshold: str = 'weak_verified') -> List[str]:
+    def get_selected_undertrained_tokens(self, threshold: str = 'strong_verified') -> List[str]:
         """
         Retrieve all tokens that are not gibberish and are marked as undertrained.
         """
