@@ -32,6 +32,7 @@ class EvaluationEntry:
     target_token_ids: list[int]
     target_token: str
     prompt_type: str
+    input_tokens : list[str]
     response: str = ""
     error_char_rate: float = 0.0
 
@@ -49,12 +50,13 @@ class Dataset:
     entries: list[EvaluationEntry] = field(default_factory=list)
 
     def add_entry(self, input_ids: list[int], target_token_ids: list[int], 
-                  target_token: str, prompt_type: str) -> None:
+                  target_token: str, prompt_type: str, input_tokens: list[str]) -> None:
         self.entries.append(EvaluationEntry(
             input_ids=input_ids,
             target_token_ids=target_token_ids,
             target_token=target_token,
-            prompt_type=prompt_type
+            prompt_type=prompt_type,
+            input_tokens=input_tokens
         ))
 
     def __len__(self) -> int:
@@ -76,7 +78,8 @@ def prepare_dataset(token_norm: TokenNorm, prompts: dict[str, Any],
             token_ids = tokenizer.encode(data['decoded'], add_special_tokens=False)
             try:
                 new_input_ids = inject_token_at_placeholder(input_ids, placeholder_ids, token_ids)
-                dataset.add_entry(new_input_ids, token_ids, data['decoded'], prompt_type)
+                input_tokens = tokenizer.convert_ids_to_tokens(new_input_ids)
+                dataset.add_entry(new_input_ids, token_ids, data['decoded'], prompt_type, input_tokens)
             except ValueError:
                 continue
 

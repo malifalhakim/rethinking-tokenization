@@ -184,8 +184,7 @@ def main(args):
         model, tokenizer = prepare_model(args.model_name, use_vllm=True, **vllm_kwargs)
     else:
         model, tokenizer = prepare_model(args.model_name, use_vllm=False, **hf_kwargs)
-        model = model.to(args.device)
-    
+        
     # -- Apply custom tokenizer if specified --
     if args.tokenizer_type == "norm":
         if not args.magikarp_path:
@@ -317,12 +316,6 @@ if __name__ == "__main__":
         type=int,
         default=256,
         help="Maximum number of new tokens to generate"
-    )
-    parser.add_argument(
-        "--device",
-        type=str,
-        default="cuda" if torch.cuda.is_available() else "cpu",
-        help="Device to run the model on"
     )
     parser.add_argument(
         "--seed",
