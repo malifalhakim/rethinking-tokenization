@@ -171,7 +171,12 @@ def main(args):
     # -- Load dataset --
     print("Loading MMLU dataset...")
     dataset = load_dataset("cais/mmlu", "all", split="test")
-    subjects = dataset.features["subject"].names
+    
+    if args.limit is not None and args.limit > 0:
+        dataset = dataset.select(range(min(args.limit, len(dataset))))
+        print(f"Limited dataset to {len(dataset)} samples")
+    
+    subjects = dataset.unique("subject")
     
     # -- Prepare model and tokenizer --
     print(f"Loading model: {args.model_name}")
@@ -294,6 +299,12 @@ if __name__ == "__main__":
         "--save_tokenized",
         action="store_true",
         help="Save tokenized inputs in the logs"
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Limit the number of samples in the dataset"
     )
     
     args = parser.parse_args()

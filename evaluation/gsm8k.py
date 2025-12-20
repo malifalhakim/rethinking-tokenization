@@ -143,6 +143,9 @@ def main(args: argparse.Namespace) -> None:
 
     if 'problem' not in dataset.columns or 'answer' not in dataset.columns:
         raise ValueError("Dataset must contain 'problem' and 'answer' columns.")
+    
+    if args.limit is not None and args.limit > 0:
+        dataset = dataset.head(args.limit)
 
     model, tokenizer = prepare_model(args.model_name, args.use_vllm)
     
@@ -186,6 +189,7 @@ if __name__ == '__main__':
     parser.add_argument('--model_name', type=str, required=True, help='Name or path of the pre-trained model.')
     parser.add_argument('--use_vllm', action='store_true', help='Whether to use vLLM for inference.')
     parser.add_argument('--tokenizer_type', type=str, choices=['standard', 'norm'], default='standard', help='Type of tokenizer to use.')
+    parser.add_argument('--limit', type=int, default=None, help='Limit the number of samples to evaluate.')
     parser.add_argument('--max_new_tokens', type=int, default=256, help='Maximum number of new tokens to generate.')
     parser.add_argument('--temperature', type=float, default=0.0, help='Sampling temperature.')
     parser.add_argument('--top_p', type=float, default=1.0, help='Top-p sampling parameter.')
