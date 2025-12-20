@@ -4,6 +4,8 @@
 # MAIN CONFIGURATION (CHANGE THIS SECTION)
 # =============================================================================
 IS_TESTING=false
+CUDA_VISIBLE_DEVICES="0"
+export CUDA_VISIBLE_DEVICES
 
 MODEL_NAME="Qwen/Qwen2.5-7B-Instruct"
 MAGIKARP_PATH="results/undertrained/l2-norm/Qwen_Qwen2_5_7B_Instruct.jsonl"
@@ -90,7 +92,7 @@ run_gsm8k() {
     local limit_flag=""
     [ -n "$limit" ] && limit_flag="--limit $limit"
 
-    python -u evaluation/gsm8k_evaluation.py \
+    python -u evaluation/gsm8k.py \
         --model_name "$MODEL_NAME" \
         --magikarp_path "$MAGIKARP_PATH" \
         --tokenizer_type "$TOKENIZER_TYPE" \
@@ -156,7 +158,7 @@ run_mtnt() {
     local limit_flag=""
     [ -n "$limit" ] && limit_flag="--limit $limit"
 
-    python -u evaluation/mtnt_evaluation.py \
+    python -u evaluation/mtnt.py \
         --model_name "$MODEL_NAME" \
         --magikarp_path "$MAGIKARP_PATH" \
         --tokenizer_type "$TOKENIZER_TYPE" \
