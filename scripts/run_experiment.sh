@@ -3,23 +3,23 @@
 # =============================================================================
 # MAIN CONFIGURATION (CHANGE THIS SECTION)
 # =============================================================================
-IS_TESTING=false
-CUDA_VISIBLE_DEVICES="0"
+IS_TESTING=${IS_TESTING:-false}
+CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
 export CUDA_VISIBLE_DEVICES
 
-MODEL_NAME="Qwen/Qwen2.5-7B-Instruct"
-MAGIKARP_PATH="results/undertrained/l2-norm/Qwen_Qwen2_5_7B_Instruct.jsonl"
-TOKENIZER_TYPE="norm"
+MODEL_NAME=${MODEL_NAME:-"Qwen/Qwen2-5-7B-Instruct"}
+MAGIKARP_PATH=${MAGIKARP_PATH:-"results/undertrained/l2-norm/Qwen_Qwen2_5_7B_Instruct.jsonl"}
+TOKENIZER_TYPE=${TOKENIZER_TYPE:-"norm"}
 
 SANITIZED_MODEL_NAME="${MODEL_NAME//\//_}"
 SANITIZED_MODEL_NAME="${SANITIZED_MODEL_NAME//./_}"
 SANITIZED_MODEL_NAME="${SANITIZED_MODEL_NAME//-/_}"
 
 # Experiments to run (set to true/false)
-RUN_PASSKEY=true
-RUN_GSM8K=true
-RUN_MMLU=true
-RUN_MTNT=true
+RUN_PASSKEY=${RUN_PASSKEY:-true}
+RUN_GSM8K=${RUN_GSM8K:-true}
+RUN_MMLU=${RUN_MMLU:-true}
+RUN_MTNT=${RUN_MTNT:-true}
 
 # =============================================================================
 # HELPER FUNCTIONS (DO NOT MODIFY)
