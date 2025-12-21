@@ -41,7 +41,7 @@ def load_jsonl(file_path: str) -> pd.DataFrame:
 def apply_prompt(tokenizer, problems: list[str], use_vllm: bool) -> list[str]:
     """Format problems with the prompt template."""
     prompts = [PROMPT_TEMPLATE.format(problem_text=problem) for problem in problems]
-    return process_prompt(prompts, tokenizer, use_vllm)
+    return process_prompt(tokenizer, prompts, use_vllm)
 
 
 def preprocess_dataset(dataset: pd.DataFrame, tokenizer, token_norm: TokenNorm) -> pd.DataFrame:

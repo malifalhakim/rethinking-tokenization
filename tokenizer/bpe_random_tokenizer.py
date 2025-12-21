@@ -36,7 +36,7 @@ class BPEAlternativeTokenizer:
         n: int = 1,
         add_special_tokens: bool = True,
         padding: Union[bool, str] = False,
-        return_tensors: Optional[str] = 'pt',
+        return_tensors: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Tokenizes the input text(s), generating N alternative tokenizations.
@@ -63,7 +63,7 @@ class BPEAlternativeTokenizer:
             flat_input_ids.extend(ids_list)
         
         if padding:
-            max_length = max(ids.shape[1] for ids in batch_input_ids)
+            max_length = max(ids.shape[1] for ids in flat_input_ids)
             padded_input_ids = []
             attention_masks = []
 
@@ -226,7 +226,7 @@ class BPEAlternativeTokenizer:
 
         return alternatives
 
-    def encode(self, text:str, return_tensors:str, n:int=1, add_special_tokens:bool=True):
+    def encode(self, text:str, return_tensors:Optional[str] = None, n:int=1, add_special_tokens:bool=True):
         """
         Encodes the text into token IDs, generating N alternative tokenizations.
         """
