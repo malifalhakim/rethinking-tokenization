@@ -121,7 +121,7 @@ def evaluate_batch(
 
 def calculate_bleu_scores(results: list[dict]) -> dict:
     """Calculate SacreBLEU scores for the results."""
-    bleu = BLEU()
+    bleu = BLEU(effective_order=True)
     
     predictions = [r["prediction"] for r in results]
     references = [[r["reference"]] for r in results]
