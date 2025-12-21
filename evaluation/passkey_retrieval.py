@@ -12,7 +12,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from utils.helper import prepare_model, process_prompt, generate_response_with_params, inject_token_at_placeholder
-from tokenizer.bpe_norm_tokenizer import BPENormTokenizer
+from tokenizer.bpe_undertrained_norm_tokenizer import BPEUndertrainedNormTokenizer
 from quantifier.trainness.magikarp import TokenNorm
 
 PROMPT_TEMPLATES = {
@@ -184,7 +184,7 @@ def main(args: argparse.Namespace) -> None:
     token_norm = TokenNorm(args.magikarp_path, tokenizer)
 
     if args.tokenizer_type == 'norm':
-        tokenizer = BPENormTokenizer(tokenizer, token_norm)
+        tokenizer = BPEUndertrainedNormTokenizer(tokenizer, token_norm, threshold='strong_verified')
 
     prompts = build_prompts(tokenizer, args.use_vllm)
     dataset = prepare_dataset(token_norm, prompts, tokenizer, args.number_of_data)

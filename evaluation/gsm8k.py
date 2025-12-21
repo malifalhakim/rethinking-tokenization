@@ -10,7 +10,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from quantifier.trainness.magikarp import TokenNorm
-from tokenizer.bpe_norm_tokenizer import BPENormTokenizer
+from tokenizer.bpe_undertrained_norm_tokenizer import BPEUndertrainedNormTokenizer
 from utils.helper import prepare_model, process_prompt, inject_token_at_placeholder, generate_response_with_params
 
 PROMPT_TEMPLATE = """Answer the following math problem. 
@@ -151,7 +151,7 @@ def main(args: argparse.Namespace) -> None:
     
     token_norm = TokenNorm(args.magikarp_path, tokenizer)
     if args.tokenizer_type == 'norm':
-        tokenizer = BPENormTokenizer(tokenizer, token_norm)
+        tokenizer = BPEUndertrainedNormTokenizer(tokenizer, token_norm, threshold='strong_verified')
 
     dataset['formatted_question'] = apply_prompt(tokenizer, dataset['problem'].tolist(), args.use_vllm)
     dataset = preprocess_dataset(dataset, tokenizer, token_norm)
