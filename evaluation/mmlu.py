@@ -103,27 +103,48 @@ def evaluate_subject(
     all_option_probs = []
     all_tokenized_strings = [] if collect_tokenized else None
     
-    for i in range(0, len(prompts), batch_size):
-        batch_prompts = prompts[i:i + batch_size]
-        tokenized_prompts = process_prompt(tokenizer, batch_prompts, use_vllm=False)
+    i = 0
+    while i < len(prompts):
+        current_batch_size = batch_size
+        success = False
         
-        if collect_tokenized:
-            for j in range(tokenized_prompts["input_ids"].shape[0]):
-                tokens_as_strings = tokenizer.convert_ids_to_tokens(
-                    tokenized_prompts["input_ids"][j].tolist()
-                )
-                all_tokenized_strings.append(tokens_as_strings)
-        
-        tokenized_prompts = {k: v.to(model.device) for k, v in tokenized_prompts.items()}
-        
-        probabilities = get_model_probabilities(model, tokenized_prompts)
-        batch_probs = get_option_probabilities(probabilities, tokenized_prompts, option_tokens)
-        all_option_probs.extend(batch_probs)
-        
-        # Clean up GPU memory
-        del tokenized_prompts, probabilities
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+        while not success and current_batch_size >= 1:
+            try:
+                batch_prompts = prompts[i:i + current_batch_size]
+                tokenized_prompts = process_prompt(tokenizer, batch_prompts, use_vllm=False)
+                
+                if collect_tokenized:
+                    for j in range(tokenized_prompts["input_ids"].shape[0]):
+                        tokens_as_strings = tokenizer.convert_ids_to_tokens(
+                            tokenized_prompts["input_ids"][j].tolist()
+                        )
+                        all_tokenized_strings.append(tokens_as_strings)
+                
+                tokenized_prompts = {k: v.to(model.device) for k, v in tokenized_prompts.items()}
+                
+                probabilities = get_model_probabilities(model, tokenized_prompts)
+                batch_probs = get_option_probabilities(probabilities, tokenized_prompts, option_tokens)
+                all_option_probs.extend(batch_probs)
+                
+                # Clean up GPU memory
+                del tokenized_prompts, probabilities
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                
+                success = True
+                i += current_batch_size
+                
+            except torch.cuda.OutOfMemoryError:
+                # Clean up and try with smaller batch
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                gc.collect()
+                
+                current_batch_size = current_batch_size // 2
+                if current_batch_size >= 1:
+                    print(f"OOM encountered, reducing batch size to {current_batch_size}")
+                else:
+                    raise RuntimeError("OOM even with batch size 1, cannot continue")
     
     # Calculate results
     logs = []
