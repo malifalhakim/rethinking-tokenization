@@ -76,7 +76,7 @@ def generate_response_with_params(model, tokenized_prompts, tokenizer, use_vllm:
         if isinstance(tokenized_prompts[0], str):
             outputs = model.generate(tokenized_prompts, sampling_params)
         else:
-            outputs = model.generate(prompt_token_ids=tokenized_prompts, sampling_params=sampling_params)
+            outputs = model.generate(prompts=tokenized_prompts, sampling_params=sampling_params)
         
         responses = [output.outputs[0].text for output in outputs]
     else:
