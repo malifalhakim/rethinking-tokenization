@@ -24,7 +24,7 @@ class BPENormTokenizer(BPEAlternativeTokenizer):
         super().__init__(tokenizer)
         self.token_norm = token_norm
     
-    def _scoring_function(self, item: Tuple[float, int, List[str]], length_penalty: float = 0.02) -> float:
+    def _scoring_function(self, item: Tuple[float, int, List[str]], length_penalty: float = 0.1) -> float:
         """
         Scoring function to evaluate tokenizations based on average token norm.
         """
@@ -65,9 +65,14 @@ class BPENormTokenizer(BPEAlternativeTokenizer):
 
             # Keep top K candidates for this position 
             dp[i] = heapq.nlargest(k, candidates, key=lambda x: self._scoring_function(x))
+
+        default_tokens = self.tokenizer.tokenize(word)
+        default_score = sum([self.token_norm.get_score([t]) for t in default_tokens])
+        default_candidate = (default_score, len(default_tokens), default_tokens)
         
         if dp[n]:
-            best_candidate = max(dp[n], key=lambda x: self._scoring_function(x))
+            all_candidates = dp[n] + [default_candidate]
+            best_candidate = max(all_candidates, key=lambda x: self._scoring_function(x))
             return best_candidate[2]
         
         return self.tokenizer.tokenize(word)
@@ -81,6 +86,9 @@ class BPENormTokenizer(BPEAlternativeTokenizer):
         final_tokenization = []
         
         for word, offset in pre_words:
+            if word in self.special_tokens:
+                final_tokenization.append(word)
+                continue
             best_word_tokens = self._find_best_word_tokenization(word)
             final_tokenization.extend(best_word_tokens)
             

@@ -29,6 +29,7 @@ class BPEAlternativeTokenizer:
         self.eos_token = tokenizer.eos_token
         self.vocab: Set[str] = set(tokenizer.get_vocab().keys())
         self.padding_side = tokenizer.padding_side
+        self.special_tokens = set()
 
     def __call__(
         self,
@@ -148,6 +149,7 @@ class BPEAlternativeTokenizer:
                 special_tokens.add(token)
         
         special_tokens = list(special_tokens)
+        self.special_tokens = set(special_tokens)
         
         if not special_tokens:
             return self.tokenizer.backend_tokenizer.pre_tokenizer.pre_tokenize_str(text)
@@ -199,6 +201,9 @@ class BPEAlternativeTokenizer:
             current_full_tokenization = []
             
             for word, _ in pre_words:
+                if word in self.special_tokens:
+                    current_full_tokenization.append(word)
+                    continue
                 nodes = [[] for _ in range(len(word) + 1)]
                 nodes[0].append(0)
                 for i in range(1, len(word) + 1):

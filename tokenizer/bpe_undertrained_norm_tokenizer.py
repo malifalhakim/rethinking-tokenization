@@ -17,7 +17,7 @@ class BPEUndertrainedNormTokenizer(BPENormTokenizer):
     containing undertrained tokens.
     """
 
-    def __init__(self, tokenizer, token_norm: TokenNorm, threshold: str = "weak_verified"):
+    def __init__(self, tokenizer, token_norm: TokenNorm, threshold: str = "strong_verified"):
         """
         Initializes the norm-based tokenizer.
         """
@@ -35,6 +35,10 @@ class BPEUndertrainedNormTokenizer(BPENormTokenizer):
         final_tokenization = []
         
         for word, offset in pre_words:
+            if word in self.special_tokens:
+                final_tokenization.append(word)
+                continue
+
             begin, end = offset
             canonical_word_tokens = self.tokenizer.tokenize(text[begin:end])
             if not self.token_norm.is_contains_undertrained_tokens(text[begin:end], self.threshold):
