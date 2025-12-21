@@ -59,8 +59,12 @@ class BPEAlternativeTokenizer:
             batch_input_ids.append(input_ids)
         
         flat_input_ids = []
-        for ids_list in batch_input_ids:
-            flat_input_ids.extend(ids_list)
+
+        if n == 1:
+            flat_input_ids = batch_input_ids
+        else:
+            for ids_list in batch_input_ids:
+                flat_input_ids.extend(ids_list)
         
         if padding:
             max_length = max(ids.shape[1] for ids in flat_input_ids)
@@ -241,7 +245,7 @@ class BPEAlternativeTokenizer:
                 ids = torch.tensor([ids])
             encoded_tensors.append(ids)
 
-        return encoded_tensors
+        return encoded_tensors[0] if n == 1 else encoded_tensors
     
     def convert_ids_to_tokens(self, ids) -> List[str]:
         """
