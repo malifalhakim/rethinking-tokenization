@@ -14,17 +14,38 @@ if project_root not in sys.path:
 from datasets import load_dataset
 from quantifier.trainness.magikarp import TokenNorm
 from tokenizer.bpe_norm_tokenizer import BPENormTokenizer
-from utils.helper import prepare_model, process_prompt, find_optimal_batch_size
+from utils.helper import prepare_model, find_optimal_batch_size
 
 PROMPT_TEMPLATE = """{question}
 A. {option_a}
 B. {option_b}
 C. {option_c}
 D. {option_d}
-Answer with the option letter.
-ANSWER: """
+Answer with the option letter."""
 
-OPTION_LABELS = ["A", "B", "C", "D"]
+OPTION_LABELS = [" A", " B", " C", " D"]
+
+
+def process_prompt(tokenizer, prompts: list[str], use_vllm: bool):
+    """
+    Tokenizes the prompt.
+    """
+    if use_vllm:
+        processed_prompts = []
+        for prompt in prompts:
+            chat = [{"role": "user", "content": prompt}]
+            processed_prompts.append(tokenizer.apply_chat_template(chat, tokenize=False, add_generation_prompt=True))
+        return processed_prompts
+    
+    chats = [[{"role": "user", "content": p}] for p in prompts]
+    templated_prompts = [
+        tokenizer.apply_chat_template(chat, tokenize=False, add_generation_prompt=True) + "The answer is"
+        for chat in chats
+    ]
+
+    tokenizer.padding_side = "left"
+    tokenized_inputs = tokenizer(templated_prompts, return_tensors="pt", padding=True, add_special_tokens=False)
+    return tokenized_inputs
 
 
 def apply_prompt(question: str, options: list[str]) -> str:
@@ -63,18 +84,14 @@ def get_model_probabilities(model, tokenized_prompts: dict) -> torch.Tensor:
 
 def get_option_probabilities(
     probabilities: torch.Tensor, 
-    tokenized_prompts: dict, 
     option_tokens: dict[str, int]
 ) -> list[dict[str, float]]:
     """Extract probabilities for option tokens from the last position."""
-    attention_mask = tokenized_prompts["attention_mask"]
-    seq_lengths = attention_mask.sum(dim=1) - 1
-    
     batch_size = probabilities.shape[0]
     option_probs = []
     
     for i in range(batch_size):
-        last_pos = seq_lengths[i].item()
+        last_pos = -1
         last_token_probs = probabilities[i, last_pos, :]
         
         probs = {
@@ -123,7 +140,7 @@ def evaluate_subject(
                 tokenized_prompts = {k: v.to(model.device) for k, v in tokenized_prompts.items()}
                 
                 probabilities = get_model_probabilities(model, tokenized_prompts)
-                batch_probs = get_option_probabilities(probabilities, tokenized_prompts, option_tokens)
+                batch_probs = get_option_probabilities(probabilities, option_tokens)
                 all_option_probs.extend(batch_probs)
                 
                 # Clean up GPU memory

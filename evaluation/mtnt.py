@@ -24,9 +24,17 @@ from utils.helper import (
     initiate_seed
 )
 
-TRANSLATION_PROMPT_TEMPLATE = """Translate the following text to {target_language}:
+TRANSLATION_PROMPT_TEMPLATE = """Task: Translate the provided text into {target_language}.
 
+Rules:
+1. Output ONLY the direct translation.
+2. Do not include any introductory remarks, explanations, or closing comments.
+3. Maintain the original formatting and tone.
+
+Source Text:
+\"\"\"
 {source_text}
+\"\"\"
 
 Translation:"""
 
@@ -91,7 +99,7 @@ def evaluate_batch(
     
     tokenized_prompts = process_prompt(tokenizer, prompts, use_vllm)
     if args.use_vllm:
-        tokenized_prompts = [tokenizer.encode(prompt, add_special_tokens=False) for prompt in prompts]
+        tokenized_prompts = [tokenizer.encode(prompt, add_special_tokens=False) for prompt in tokenized_prompts]
     
     tokenized_strings = None
     if collect_tokenized:
