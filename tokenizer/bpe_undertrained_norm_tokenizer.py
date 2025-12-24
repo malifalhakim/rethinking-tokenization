@@ -45,7 +45,8 @@ class BPEUndertrainedNormTokenizer(BPENormTokenizer):
                 final_tokenization.extend(canonical_word_tokens)
                 continue
             
-            best_word_tokens = self._find_best_word_tokenization(word)
+            original_word = text[begin:end]
+            best_word_tokens = self._find_best_word_tokenization(word, original_word)
             final_tokenization.extend(best_word_tokens)
             
         return final_tokenization

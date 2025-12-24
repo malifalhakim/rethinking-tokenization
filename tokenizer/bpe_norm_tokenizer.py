@@ -36,7 +36,7 @@ class BPENormTokenizer(BPEAlternativeTokenizer):
         penalty_term = length_penalty * (token_count - 1)
         return average_score - penalty_term
 
-    def _find_best_word_tokenization(self, word: str, k: int = 5) -> List[str]:
+    def _find_best_word_tokenization(self, word: str, original_word:str, k: int = 5) -> List[str]:
         """
         Finds the optimal tokenization for a word based on token norm scores.
         """
@@ -66,7 +66,7 @@ class BPENormTokenizer(BPEAlternativeTokenizer):
             # Keep top K candidates for this position 
             dp[i] = heapq.nlargest(k, candidates, key=lambda x: self._scoring_function(x))
 
-        default_tokens = self.tokenizer.tokenize(word)
+        default_tokens = self.tokenizer.tokenize(original_word)
         default_score = sum([self.token_norm.get_score([t]) for t in default_tokens])
         default_candidate = (default_score, len(default_tokens), default_tokens)
         
@@ -75,7 +75,7 @@ class BPENormTokenizer(BPEAlternativeTokenizer):
             best_candidate = max(all_candidates, key=lambda x: self._scoring_function(x))
             return best_candidate[2]
         
-        return self.tokenizer.tokenize(word)
+        return self.tokenizer.tokenize(original_word)
 
     def generate_best_tokenization(self, text: str) -> List[str]:
         """
@@ -89,7 +89,10 @@ class BPENormTokenizer(BPEAlternativeTokenizer):
             if word in self.special_tokens:
                 final_tokenization.append(word)
                 continue
-            best_word_tokens = self._find_best_word_tokenization(word)
+
+            begin, end = offset
+            original_word = text[begin:end]
+            best_word_tokens = self._find_best_word_tokenization(word, original_word)
             final_tokenization.extend(best_word_tokens)
             
         return final_tokenization

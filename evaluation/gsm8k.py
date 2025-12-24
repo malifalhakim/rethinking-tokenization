@@ -18,7 +18,7 @@ You must think step-by-step to solve it.
 At the very end of your response, write the final numerical answer starting with "####".
 
 Question:
-{problem_text}
+"{problem_text}"
 
 Answer:"""
 

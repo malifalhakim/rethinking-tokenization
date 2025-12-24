@@ -238,23 +238,27 @@ def find_sequence_index(full_list: list, sub_list: list) -> int:
     Finds the starting index of sub_list in full_list.
     Returns -1 if sub_list is not found.
     """
+    indicies = []
     sub_len = len(sub_list)
     for i in range(len(full_list) - sub_len + 1):
         if full_list[i:i + sub_len] == sub_list:
-            return i
-    return -1
+            indicies.append(i)
+    return indicies
 
 def inject_token_at_placeholder(input_ids: list, placeholder_ids: list, token_ids: list) -> list:
     """
     Replaces the placeholder_ids in input_ids with token_ids.
     """
-    index = find_sequence_index(input_ids, placeholder_ids)
-    if index == -1:
+    indices = find_sequence_index(input_ids, placeholder_ids)
+    if not indices:
         raise ValueError("Placeholder IDs not found in input IDs.")
     
-    new_input_ids = (
-        input_ids[:index] + 
-        token_ids + 
-        input_ids[index + len(placeholder_ids):]
-    )
+    new_input_ids = input_ids.copy()
+    for index in reversed(indices): 
+        new_input_ids = (
+            new_input_ids[:index] + 
+            token_ids + 
+            new_input_ids[index + len(placeholder_ids):]
+        )
+        
     return new_input_ids

@@ -113,6 +113,11 @@ class TokenNorm:
             if re.search(r'[\{\}\[\]\(\)]', token_str):
                 continue
 
+            if (token_str.startswith('<') and token_str.endswith('>')) or \
+               (token_str.startswith('[') and token_str.endswith(']')) or \
+               (token_str.startswith('<|') and token_str.endswith('|>')):
+                continue
+
             selected_tokens[token_id] = {
                 'raw_vocab': raw_vocab,
                 'decoded': decoded_token,
