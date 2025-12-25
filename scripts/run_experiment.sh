@@ -110,7 +110,7 @@ run_gsm8k() {
 # EXPERIMENT: MMLU EVALUATION
 # =============================================================================
 run_mmlu() {
-    local starting_batch_size=256
+    local starting_batch_size=32
     local limit=$(get_limit "")
     local output_dir="results/experiments/mmlu/$SANITIZED_MODEL_NAME"
     local output_path="$output_dir/$TOKENIZER_TYPE.json"
