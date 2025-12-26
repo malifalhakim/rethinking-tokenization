@@ -9,7 +9,10 @@ export CUDA_VISIBLE_DEVICES
 
 MODEL_NAME=${MODEL_NAME:-"Qwen/Qwen2.5-7B-Instruct"}
 MAGIKARP_PATH=${MAGIKARP_PATH:-"results/undertrained/l2-norm/Qwen_Qwen2_5_7B_Instruct.jsonl"}
+ENTROPY_PATH=${ENTROPY_PATH:-"results/undertrained/entropy/Qwen2.5-7B-Instruct_token_entropy.json"}
+ENTROPY_PKL=${ENTROPY_PKL:-"results/undertrained/entropy/Qwen2.5-7B-Instruct_glitch_tokens.pkl"}
 TOKENIZER_TYPE=${TOKENIZER_TYPE:-"norm"}
+QUANTIFIER_TYPE=${QUANTIFIER_TYPE:-"norm"}
 
 SANITIZED_MODEL_NAME="${MODEL_NAME//\//_}"
 SANITIZED_MODEL_NAME="${SANITIZED_MODEL_NAME//./_}"
@@ -38,6 +41,20 @@ get_limit() {
     fi
 }
 
+get_file_suffix() {
+    if [ "$TOKENIZER_TYPE" = "standard" ]; then
+        if [ "$QUANTIFIER_TYPE" = "norm" ]; then
+            echo "_magikarp"
+        elif [ "$QUANTIFIER_TYPE" = "entropy" ]; then
+            echo "_entropy"
+        else
+            echo ""
+        fi
+    else
+        echo ""
+    fi
+}
+
 # =============================================================================
 # EXPERIMENT: PASSKEY RETRIEVAL
 # =============================================================================
@@ -45,9 +62,10 @@ run_passkey_retrieval() {
     local use_vllm=true
     local number_of_data=$(get_limit 500)
     local output_dir="results/experiments/passkey_retrieval/$SANITIZED_MODEL_NAME"
-    local output_path="$output_dir/$TOKENIZER_TYPE.jsonl"
-    local stats_path="$output_dir/stats_$TOKENIZER_TYPE.json"
-    local log_path="$output_dir/log_$TOKENIZER_TYPE.txt"
+    local suffix=$(get_file_suffix)
+    local output_path="$output_dir/${TOKENIZER_TYPE}${suffix}.jsonl"
+    local stats_path="$output_dir/stats_${TOKENIZER_TYPE}${suffix}.json"
+    local log_path="$output_dir/log_${TOKENIZER_TYPE}${suffix}.txt"
 
     mkdir -p "$output_dir"
     echo "Logging to $log_path"
@@ -65,6 +83,9 @@ run_passkey_retrieval() {
         $limit_flag \
         --output_path "$output_path" \
         --stats_path "$stats_path" \
+        --entropy_path "$ENTROPY_PATH" \
+        --entropy_pkl "$ENTROPY_PKL" \
+        --quantifier_type "$QUANTIFIER_TYPE" \
         $vllm_flag \
         2>&1 | tee "$log_path"
 
@@ -79,9 +100,10 @@ run_gsm8k() {
     local dataset_path="dataset/GSM8K/gsm8k_modified_dataset.jsonl"
     local limit=$(get_limit "")
     local output_dir="results/experiments/gsm8k/$SANITIZED_MODEL_NAME"
-    local output_path="$output_dir/$TOKENIZER_TYPE.jsonl"
-    local stats_path="$output_dir/stats_$TOKENIZER_TYPE.json"
-    local log_path="$output_dir/log_$TOKENIZER_TYPE.txt"
+    local suffix=$(get_file_suffix)
+    local output_path="$output_dir/${TOKENIZER_TYPE}${suffix}.jsonl"
+    local stats_path="$output_dir/stats_${TOKENIZER_TYPE}${suffix}.json"
+    local log_path="$output_dir/log_${TOKENIZER_TYPE}${suffix}.txt"
 
     mkdir -p "$output_dir"
     echo "Logging to $log_path"
@@ -100,6 +122,9 @@ run_gsm8k() {
         $limit_flag \
         --detailed_output_path "$output_path" \
         --stats_output_path "$stats_path" \
+        --quantifier_type "$QUANTIFIER_TYPE" \
+        --entropy_path "$ENTROPY_PATH" \
+        --entropy_pkl "$ENTROPY_PKL" \
         $vllm_flag \
         2>&1 | tee "$log_path"
 
@@ -130,6 +155,8 @@ run_mmlu() {
         --batch_size "$starting_batch_size" \
         $limit_flag \
         --save_tokenized \
+        --entropy_path "$ENTROPY_PATH" \
+        --entropy_pkl "$ENTROPY_PKL" \
         2>&1 | tee "$log_path"
 
     send_notification "MMLU Evaluation Experiment for $MODEL_NAME with $TOKENIZER_TYPE tokenizer completed."
@@ -170,6 +197,8 @@ run_mtnt() {
         $limit_flag \
         $vllm_flag \
         --save_tokenized \
+        --entropy_path "$ENTROPY_PATH" \
+        --entropy_pkl "$ENTROPY_PKL" \
         2>&1 | tee "$log_path"
 
     send_notification "MTNT Evaluation Experiment for $MODEL_NAME with $TOKENIZER_TYPE tokenizer completed."
