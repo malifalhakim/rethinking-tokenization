@@ -13,7 +13,9 @@ if project_root not in sys.path:
 
 from utils.helper import prepare_model, process_prompt, generate_response_with_params, inject_token_at_placeholder
 from tokenizer.bpe_undertrained_norm_tokenizer import BPEUndertrainedNormTokenizer
+from tokenizer.bpe_undertrained_entropy_tokenizer import BPEUndertrainedEntropyTokenizer
 from quantifier.trainness.magikarp import TokenNorm
+from quantifier.trainness.entropy import TokenEntropy
 
 PROMPT_TEMPLATES = {
     "direct": "The secret password for the database is 'TOKEN'. Extract the password and spell it by placing a hyphen between every letter.\nOutput ONLY the hyphenated string. Do not provide any introductory text, labels, or explanations.",
@@ -63,7 +65,7 @@ class Dataset:
         return len(self.entries)
 
 
-def prepare_dataset(token_norm: TokenNorm, prompts: dict[str, Any], 
+def prepare_dataset(token_norm: TokenNorm | TokenEntropy, prompts: dict[str, Any], 
                     tokenizer, number_of_data: int = 500) -> Dataset:
     placeholder_ids = tokenizer.encode(PLACEHOLDER_TEXT, add_special_tokens=False)
     undertrained_tokens = token_norm.get_selected_undertrained_tokens(threshold='strong_verified')
@@ -181,13 +183,20 @@ def build_prompts(tokenizer, use_vllm: bool) -> dict[str, Any]:
 
 def main(args: argparse.Namespace) -> None:
     model, tokenizer = prepare_model(args.model_name, args.use_vllm)
-    token_norm = TokenNorm(args.magikarp_path, tokenizer)
+
+    quantifier = None
+    if args.quantifier_type == "norm":
+        quantifier = TokenNorm(args.magikarp_path, tokenizer)
+    elif args.quantifier_type == "entropy":
+        quantifier = TokenEntropy(args.entropy_path, tokenizer, args.entropy_pkl)
 
     if args.tokenizer_type == 'norm':
-        tokenizer = BPEUndertrainedNormTokenizer(tokenizer, token_norm, threshold='strong_verified')
+        tokenizer = BPEUndertrainedNormTokenizer(tokenizer, quantifier, threshold='strong_verified')
+    elif args.tokenizer_type == "entropy":
+        tokenizer = BPEUndertrainedEntropyTokenizer(tokenizer, quantifier)
 
     prompts = build_prompts(tokenizer, args.use_vllm)
-    dataset = prepare_dataset(token_norm, prompts, tokenizer, args.number_of_data)
+    dataset = prepare_dataset(quantifier, prompts, tokenizer, args.number_of_data)
 
     input_ids_list = [entry.input_ids for entry in dataset.entries]
     responses = generate_response_with_params(
@@ -215,8 +224,11 @@ def main(args: argparse.Namespace) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate Passkey Retrieval with Undertrained Tokens")
     parser.add_argument('--model_name', type=str, required=True, help='Pretrained model name or path')
-    parser.add_argument('--magikarp_path', type=str, required=True, help='Path to Magikarp JSONL file')
-    parser.add_argument('--tokenizer_type', type=str, choices=['standard', 'norm'], default='standard')
+    parser.add_argument('--magikarp_path', type=str, default=None, help='Path to Magikarp JSONL file')
+    parser.add_argument('--entropy_path', type=str, default=None, help='Path to Entropy JSON file')
+    parser.add_argument('--entropy_pkl', type=str, default=None, help='Path to Entropy pickle file')
+    parser.add_argument('--quantifier_type', type=str, choices=['norm', 'entropy'], required=True, help='Type of quantifier to use')
+    parser.add_argument('--tokenizer_type', type=str, choices=['standard', 'norm', 'entropy'], default='standard')
     parser.add_argument('--use_vllm', action='store_true', help='Whether to use vLLM for inference')
     parser.add_argument('--number_of_data', type=int, default=500, help='Number of undertrained tokens to evaluate')
     parser.add_argument('--max_new_tokens', type=int, default=50, help='Maximum number of new tokens to generate')

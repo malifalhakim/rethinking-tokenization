@@ -15,7 +15,9 @@ if project_root not in sys.path:
 from sacrebleu.metrics import BLEU
 
 from quantifier.trainness.magikarp import TokenNorm
+from quantifier.trainness.entropy import TokenEntropy
 from tokenizer.bpe_norm_tokenizer import BPENormTokenizer
+from tokenizer.bpe_entropy_tokenizer import BPEEntropyTokenizer
 from utils.helper import (
     prepare_model, 
     process_prompt, 
@@ -200,6 +202,12 @@ def main(args):
         print(f"Loading TokenNorm from: {args.magikarp_path}")
         token_norm = TokenNorm(args.magikarp_path, tokenizer)
         tokenizer = BPENormTokenizer(tokenizer, token_norm)
+    elif args.tokenizer_type == "entropy":
+        if not args.entropy_path or not args.entropy_pkl:
+            raise ValueError("--entropy_path and --entropy_pkl are required when using --tokenizer_type entropy")
+        print(f"Loading TokenEntropy from: {args.entropy_path} and {args.entropy_pkl}")
+        token_entropy = TokenEntropy(args.entropy_path, tokenizer, args.entropy_pkl)
+        tokenizer = BPEEntropyTokenizer(tokenizer, token_entropy)
     
     # -- Find optimal batch size --
     sample_prompts = [
@@ -298,7 +306,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--tokenizer_type",
         type=str,
-        choices=["norm", "standard"],
+        choices=["norm", "standard", "entropy"],
         default=None,
         help="Type of tokenizer to use"
     )
@@ -359,6 +367,18 @@ if __name__ == "__main__":
         type=int,
         default=None,
         help="Tensor parallel size for vLLM"
+    )
+    parser.add_argument(
+        "--entropy_path", 
+        type=str, 
+        default=None, 
+        help="Path to entropy data if using entropy tokenizer"
+    )
+    parser.add_argument(
+        "--entropy_pkl", 
+        type=str, 
+        default=None, 
+        help="Path to entropy pickle file if using entropy tokenizer"
     )
     
     args = parser.parse_args()

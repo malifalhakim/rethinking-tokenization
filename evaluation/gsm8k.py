@@ -10,7 +10,9 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from quantifier.trainness.magikarp import TokenNorm
+from quantifier.trainness.entropy import TokenEntropy
 from tokenizer.bpe_undertrained_norm_tokenizer import BPEUndertrainedNormTokenizer
+from tokenizer.bpe_undertrained_entropy_tokenizer import BPEUndertrainedEntropyTokenizer
 from utils.helper import prepare_model, process_prompt, inject_token_at_placeholder, generate_response_with_params
 
 PROMPT_TEMPLATE = """Answer the following math problem. 
@@ -44,7 +46,7 @@ def apply_prompt(tokenizer, problems: list[str], use_vllm: bool) -> list[str]:
     return process_prompt(tokenizer, prompts, use_vllm)
 
 
-def preprocess_dataset(dataset: pd.DataFrame, tokenizer, token_norm: TokenNorm) -> pd.DataFrame:
+def preprocess_dataset(dataset: pd.DataFrame, tokenizer, token_norm: TokenNorm | TokenEntropy) -> pd.DataFrame:
     """
     Preprocess dataset by injecting undertrained tokens at placeholders.
     
@@ -149,12 +151,20 @@ def main(args: argparse.Namespace) -> None:
 
     model, tokenizer = prepare_model(args.model_name, args.use_vllm)
     
-    token_norm = TokenNorm(args.magikarp_path, tokenizer)
+    quantifier = None
+    if args.quantifier_type == "norm":
+        quantifier = TokenNorm(args.magikarp_path, tokenizer)
+    elif args.quantifier_type == "entropy":
+        quantifier = TokenEntropy(args.entropy_path, tokenizer, args.entropy_pkl)
+
     if args.tokenizer_type == 'norm':
-        tokenizer = BPEUndertrainedNormTokenizer(tokenizer, token_norm, threshold='strong_verified')
+        tokenizer = BPEUndertrainedNormTokenizer(tokenizer, quantifier, threshold='strong_verified')
+    elif args.tokenizer_type == "entropy" :
+        tokenizer = BPEUndertrainedEntropyTokenizer(tokenizer, quantifier)
+    
 
     dataset['formatted_question'] = apply_prompt(tokenizer, dataset['problem'].tolist(), args.use_vllm)
-    dataset = preprocess_dataset(dataset, tokenizer, token_norm)
+    dataset = preprocess_dataset(dataset, tokenizer, quantifier)
 
     input_ids_list = dataset['input_ids'].tolist()
     responses = generate_response_with_params(
@@ -185,10 +195,10 @@ def main(args: argparse.Namespace) -> None:
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Evaluate model on GSM8K with undertrained token injection.")
     parser.add_argument('--dataset_path', type=str, required=True, help='Path to the GSM8K dataset JSONL file.')
-    parser.add_argument('--magikarp_path', type=str, required=True, help='Path to the Magikarp JSONL file.')
+    parser.add_argument('--magikarp_path', type=str, default=None, help='Path to the Magikarp JSONL file.')
     parser.add_argument('--model_name', type=str, required=True, help='Name or path of the pre-trained model.')
     parser.add_argument('--use_vllm', action='store_true', help='Whether to use vLLM for inference.')
-    parser.add_argument('--tokenizer_type', type=str, choices=['standard', 'norm'], default='standard', help='Type of tokenizer to use.')
+    parser.add_argument('--tokenizer_type', type=str, choices=['standard', 'norm', 'entropy'], default='standard', help='Type of tokenizer to use.')
     parser.add_argument('--limit', type=int, default=None, help='Limit the number of samples to evaluate.')
     parser.add_argument('--max_new_tokens', type=int, default=256, help='Maximum number of new tokens to generate.')
     parser.add_argument('--temperature', type=float, default=0.0, help='Sampling temperature.')
@@ -196,6 +206,9 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=42, help='Random seed for generation.')
     parser.add_argument('--stats_output_path', type=str, required=True, help='Path to save evaluation stats JSON file.')
     parser.add_argument('--detailed_output_path', type=str, required=True, help='Path to save detailed results JSONL file.')
+    parser.add_argument('--quantifier_type', type=str, choices=['norm', 'entropy'], required=True, help='Type of quantifier to use.')
+    parser.add_argument('--entropy_path', type=str, default=None, help='Path to entropy data if using entropy quantifier.')
+    parser.add_argument('--entropy_pkl', type=str, default=None, help='Path to entropy pickle file if using entropy quantifier.')
 
     args = parser.parse_args()
     main(args)

@@ -66,8 +66,8 @@ class TokenEntropy:
             
         return False
     
-    def get_selected_undertrained_tokens(self) -> List[str]:
-        """Return the list of undertrained tokens."""
+    def get_selected_undertrained_tokens(self, threshold) -> List[str]:
+        """Return the list of undertrained tokens. Threshold parameter is kept for compatibility with TokenNorm."""
         selected_tokens = {}
         for i, token_str in enumerate(self.undertrained_tokens):
             if not isinstance(token_str, str):
