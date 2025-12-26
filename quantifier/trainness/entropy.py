@@ -31,8 +31,8 @@ class TokenEntropy:
         return data['glitch_tokens']
 
     def _process_data(self, raw_data: List[Dict]) -> Dict[str, float]:
-        """Process the raw data into a more usable format."""
-        return {item["token_id"]: (item["token"], item["entropy"]) for item in raw_data if "token_id" in item and "token" in item and "entropy" in item}
+        """Process the raw data into a more usable format. Transform into a higher better score."""
+        return {item["token_id"]: (item["token"], -1 * item["entropy"]) for item in raw_data if "token_id" in item and "token" in item and "entropy" in item}
 
     def get_score(self, tokenization: List[str]) -> float:
         """Average entropy of provided tokens (missing tokens count as 0)."""
